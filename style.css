@@ -138,15 +138,30 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 
 /* skraceno ime na telefonu: 'Vlatko Pekovic' -> 'V. Pekovic' */
 .ime-kratko{display:none}
+
+/* Na uskom ekranu tabele idu na sitniji font i manji razmak. Sa 16-18px
+   i punim imenima nista nije stalo, pa se vise nije vidjelo ni ono najvaznije.
+   Redosljed blokova je bitan: 620px mora doci poslije 900px da ga ne pregazi. */
+@media (max-width:900px){
+  .tbl .c-name{box-shadow:6px 0 8px -6px rgba(20,40,46,.28)}   /* ima jos kolona desno */
+  .tbl th{font-size:11px;letter-spacing:.06em;padding:9px 9px}
+  .tbl td{font-size:14px;padding:9px 9px}
+  .tbl .c-pos{font-size:15px;width:42px;min-width:42px;max-width:42px}
+  .tbl .c-pos ~ .c-name{left:42px}
+  .tbl .c-name{font-size:14px}
+  .tbl .chg{font-size:14px}
+  .group-title{font-size:16px;padding:12px 12px}
+}
 @media (max-width:620px){
   .ime-puno{display:none}
   .ime-kratko{display:inline}
-  .tbl .c-name{max-width:46vw;overflow:hidden;text-overflow:ellipsis}
-}
-@media (max-width:900px){
-  /* sjenka nagovjestava da tabela ima jos kolona desno */
-  .tbl .c-name{box-shadow:6px 0 8px -6px rgba(20,40,46,.28)}
-  .tbl th,.tbl td{padding-left:10px;padding-right:10px}
+  .tbl th{font-size:10px;letter-spacing:.04em;padding:7px 7px}
+  .tbl td{font-size:13px;padding:8px 7px}
+  .tbl .c-pos{font-size:13px;width:34px;min-width:34px;max-width:34px}
+  .tbl .c-pos ~ .c-name{left:34px}
+  .tbl .c-name{font-size:13px;max-width:40vw;overflow:hidden;text-overflow:ellipsis}
+  .tbl .chg{font-size:13px}
+  .group-title{font-size:15px;padding:11px 10px}
 }
 
 /* svaka tabela skroluje unutar svoje kartice, nikad ne razvlaci stranu */
