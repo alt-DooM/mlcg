@@ -686,9 +686,25 @@ function serije() {
   }));
 }
 
+// Da li crtamo za uski ekran. Bitno je zato sto se SVG skalira: isti viewBox
+// od 1000px na telefonu se stisne na ~350px i tekst od 17px postane 6px.
+// Zato uski ekran dobija svoj, uzi i visi viewBox sa krupnijim odnosima.
+const uskiEkran = () => typeof window !== 'undefined' && window.innerWidth < 620;
+
 function crtajLinije(izabrane, maxRank) {
   const n = S.sez.kola.length;
-  const W = 1000, H = 430, L = 96, R = W - 104, T = 54, B = H - 70;
+  const usko = uskiEkran();
+  const W = usko ? 380 : 1000;
+  const H = usko ? 440 : 430;
+  const L = usko ? 46 : 96;
+  const R = W - (usko ? 34 : 104);
+  const T = usko ? 46 : 54;
+  const B = H - (usko ? 54 : 70);
+  const fOsa = usko ? 15 : 17;      // brojevi mjesta lijevo
+  const fKolo = usko ? 14 : 18;     // nazivi kola ispod
+  const fRub = usko ? 12 : 15;      // "bolje" / "slabije"
+  const rTacka = usko ? 13 : 17;    // poluprecnik kruzica
+  const fTacka = usko ? 13 : 16;    // broj u kruzicu
 
   // Y osa se skuplja na izabrane takmicare. Bez toga tri linije iz vrha plutaju
   // u praznoj tabeli od 29 mjesta i ne vidi se nikakva razlika medju njima.
@@ -700,31 +716,34 @@ function crtajLinije(izabrane, maxRank) {
 
   const xOf = i => n === 1 ? (L + R) / 2 : L + i * ((R - L) / (n - 1));
   const yOf = p => T + (p - lo) * ((B - T) / Math.max(1, hi - lo));
-  const korak = Math.max(1, Math.ceil((hi - lo + 1) / 9));
+  const korak = Math.max(1, Math.ceil((hi - lo + 1) / (usko ? 6 : 9)));
 
   let g = '';
-  g += `<text x="${L - 18}" y="${T - 24}" text-anchor="end" style="font:600 15px Archivo,sans-serif;fill:#1f7a4d">bolje</text>`;
-  g += `<text x="${L - 18}" y="${B + 30}" text-anchor="end" style="font:600 15px Archivo,sans-serif;fill:#b23b2e">slabije</text>`;
+  // na uskom ekranu nema mjesta lijevo od ose, pa oznake idu iznad i ispod
+  const xRub = usko ? L - 6 : L - 18;
+  const sidro = usko ? 'start' : 'end';
+  g += `<text x="${usko ? 4 : xRub}" y="${T - 20}" text-anchor="${sidro}" style="font:600 ${fRub}px Archivo,sans-serif;fill:#1f7a4d">bolje</text>`;
+  g += `<text x="${usko ? 4 : xRub}" y="${B + 26}" text-anchor="${sidro}" style="font:600 ${fRub}px Archivo,sans-serif;fill:#b23b2e">slabije</text>`;
 
   for (let p = lo; p <= hi; p += korak) {
     g += `<line x1="${L}" x2="${R}" y1="${yOf(p)}" y2="${yOf(p)}" stroke="#ece7dd" stroke-width="2"/>` +
-      `<text x="${L - 18}" y="${yOf(p) + 6}" text-anchor="end" style="font:600 17px Archivo,sans-serif;fill:#8b9295">${p}.</text>`;
+      `<text x="${L - 10}" y="${yOf(p) + 6}" text-anchor="end" style="font:600 ${fOsa}px Archivo,sans-serif;fill:#8b9295">${p}.</text>`;
   }
   // uspravne linije kola, da se vidi gdje se cita koja tacka
   S.sez.kola.forEach((k, i) => {
     g += `<line x1="${xOf(i)}" x2="${xOf(i)}" y1="${T - 10}" y2="${B + 10}" stroke="#f3efe7" stroke-width="2"/>` +
-      `<text x="${xOf(i)}" y="${H - 22}" text-anchor="middle" style="font:600 18px Archivo,sans-serif;fill:#3d5157">${RIMSKI[k.kolo] || k.kolo} kolo</text>`;
+      `<text x="${xOf(i)}" y="${H - 16}" text-anchor="middle" style="font:600 ${fKolo}px Archivo,sans-serif;fill:#3d5157">${RIMSKI[k.kolo] || k.kolo} kolo</text>`;
   });
 
   izabrane.forEach((serija, si) => {
     const boja = BOJE[si % BOJE.length];
     const tacke = serija.v.map((p, i) => p == null ? null : { x: xOf(i), y: yOf(p), p }).filter(Boolean);
     if (tacke.length > 1) {
-      g += `<polyline points="${tacke.map(t => t.x + ',' + t.y).join(' ')}" fill="none" stroke="${boja}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      g += `<polyline points="${tacke.map(t => t.x + ',' + t.y).join(' ')}" fill="none" stroke="${boja}" stroke-width="${usko ? 4 : 5}" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
     for (const t of tacke) {
-      g += `<circle cx="${t.x}" cy="${t.y}" r="17" fill="#fff" stroke="${boja}" stroke-width="4"/>` +
-        `<text x="${t.x}" y="${t.y + 6}" text-anchor="middle" style="font:700 16px Archivo,sans-serif;fill:${boja}">${t.p}</text>`;
+      g += `<circle cx="${t.x}" cy="${t.y}" r="${rTacka}" fill="#fff" stroke="${boja}" stroke-width="${usko ? 3 : 4}"/>` +
+        `<text x="${t.x}" y="${t.y + fTacka / 2.6}" text-anchor="middle" style="font:700 ${fTacka}px Archivo,sans-serif;fill:${boja}">${t.p}</text>`;
     }
   });
 
@@ -928,6 +947,14 @@ async function primiFajl(f) {
 /* ---------- start ---------- */
 
 if (typeof document !== 'undefined') {
+  let bioUzak = uskiEkran();
+  window.addEventListener('resize', () => {
+    const sad = uskiEkran();
+    if (sad === bioUzak) return;
+    bioUzak = sad;
+    if (S.tab === 'stat' && S.stat) renderStat();
+  });
+
   document.addEventListener('click', e => {
     const th = e.target.closest('th.sortable');
     if (!th) return;

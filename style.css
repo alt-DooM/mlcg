@@ -187,6 +187,15 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
   min-height:52px;padding:14px 20px;border-radius:999px;border:2px solid var(--line);
   background:#fff;color:var(--ink-2);font:600 clamp(15px,2.9vw,17px)/1 Archivo,sans-serif;cursor:pointer;
 }
+/* Dvadeset devet imena na telefonu je citav ekran skrolovanja prije grafikona,
+   pa se spisak skuplja i dobija svoj skrol. */
+@media (max-width:620px){
+  .chips{gap:7px;max-height:172px;overflow-y:auto;padding:2px;margin:0 0 8px;
+    border:1px solid var(--line);border-radius:12px;background:#fff}
+  .chip{min-height:34px;padding:8px 13px;font-size:13px;border-width:1px}
+  .chips-note{display:block}
+}
+.chips-note{display:none;margin:0 0 18px;font:500 13px/1.4 Archivo,sans-serif;color:var(--muted)}
 .chart-legend{display:flex;gap:24px;flex-wrap:wrap;margin:14px 0 0;padding:16px 0 0;border-top:1px solid var(--line-soft)}
 .chart-legend span{display:flex;align-items:center;gap:10px;font:600 clamp(15px,2.9vw,18px)/1 Archivo,sans-serif;color:var(--ink)}
 .chart-legend i{width:26px;height:6px;border-radius:3px;display:block}

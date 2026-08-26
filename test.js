@@ -91,12 +91,25 @@ console.log(`  OK  statistika: ${st.perTakmicar.length} takmičara, ${st.perKlub
 S.sez = sez;
 const mape = sez.snapshots.map(sn => new Map(sn.map((v, i) => [v.kljuc, i + 1])));
 const svi = sez.snapshots[2].map(v => ({ kljuc: v.kljuc, ime: v.ime, v: mape.map(m => m.get(v.kljuc) ?? null) }));
-for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1] }], []]) {
-  const svg = crtajLinije(slucaj, svi.length);
-  assert.ok(!/NaN|Infinity|undefined/.test(svg), 'grafikon ima nevalidnu koordinatu');
-  assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'), 'grafikon nije validan SVG');
+// isto i za usku, telefonsku geometriju
+const sirineEkrana = [null, 380];
+for (const w of sirineEkrana) {
+  if (w === null) delete global.window; else global.window = { innerWidth: w };
+  for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1] }], []]) {
+    const svg = crtajLinije(slucaj, svi.length);
+    assert.ok(!/NaN|Infinity|undefined/.test(svg), `grafikon (${w || 'desktop'}) ima nevalidnu koordinatu`);
+    const vb = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+    assert.ok(vb, 'grafikon nema viewBox');
+    // ni jedan element ne smije da izadje iz okvira
+    const W = +vb[1], H = +vb[2];
+    for (const m of svg.matchAll(/<(?:text|circle) [^>]*?(?:x|cx)="([\d.]+)"[^>]*?(?:y|cy)="([\d.]+)"/g)) {
+      assert.ok(+m[1] >= 0 && +m[1] <= W, `grafikon (${w || 'desktop'}): x=${m[1]} van okvira ${W}`);
+      assert.ok(+m[2] >= 0 && +m[2] <= H, `grafikon (${w || 'desktop'}): y=${m[2]} van okvira ${H}`);
+    }
+  }
 }
-console.log('  OK  grafikon: validne koordinate u svim slucajevima');
+delete global.window;
+console.log('  OK  grafikon: validne koordinate, desktop i telefon');
 
 // zajednicka tabela: sortiranje, zakovane kolone, kratko ime
 assert.strictEqual(kratkoIme('Vlatko Peković'), 'V. Peković');
