@@ -751,7 +751,8 @@ const KOL_STAT = [
   { key: 'riba', lbl: 'Riba', tip: 'int' },
   { key: 'prosjekRiba', lbl: 'Riba / sesija', tip: 'dec' },
   { key: 'najduza', lbl: 'Najduža (cm)', tip: 'int' },
-  { key: 'najbolje', lbl: 'Najbolji plasman', tip: 'int', asc: true },
+  { key: 'najbolje', lbl: 'Najbolje u kolu', tip: 'int', asc: true },
+  { key: 'najgore', lbl: 'Najgore u kolu', tip: 'int', asc: true },
   { key: 'prosjekPlasmana', lbl: 'Prosj. sekt. plasman', tip: 'dec', asc: true },
   { key: 'nule', lbl: 'Sesija bez ribe', tip: 'int', asc: true },
 ];
