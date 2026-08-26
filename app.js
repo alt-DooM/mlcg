@@ -63,12 +63,6 @@ const ALIAS_INDEX = (() => {
 
 const kanonKlub = raw => ALIAS_INDEX.get(kljuc(raw)) || lijepKlub(raw);
 
-const inicijali = naziv => {
-  // 'SRK Vodene lisice - Podgorica' -> 'VL'
-  const rijeci = String(naziv).replace(/^(SRK|SRFFK|ŠRK|SRD)\s+/i, '').split(/[\s-]+/).filter(Boolean);
-  return (rijeci.slice(0, 2).map(w => w.charAt(0)).join('') || '?').toUpperCase();
-};
-
 const kratkiKlub = naziv => String(naziv).split(' - ')[0];
 const broj = n => Number(n || 0).toLocaleString('de-DE');            // 7540 -> 7.540
 const dec = (n, d = 1) => Number(n || 0).toFixed(d).replace('.', ',');
@@ -523,7 +517,7 @@ function renderEkipno() {
     const tr = el('tr', medalja(i));
     tr.innerHTML =
       `<td class="pos">${r.mjesto}</td>` +
-      `<td><div class="team-cell"><span class="crest">${inicijali(r.ime)}</span><span class="nm">${r.ime}</span></div></td>` +
+      `<td><div class="nm">${r.ime}</div></td>` +
       `<td class="r pts">${broj(r.poena)}</td>` +
       `<td class="r only-wide sec">${r.plasman}</td>` +
       `<td class="r">${promjenaHtml(r.promjena)}</td>`;
