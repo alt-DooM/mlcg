@@ -396,7 +396,9 @@ function statistika(sez) {
     }
   });
 
+  const krajnjaMjesta = mjesta(sez.snapshots[sez.snapshots.length - 1] || []);
   const perTakmicar = [...t.values()].map(a => ({
+    mjesto: krajnjaMjesta.get(a.kljuc) ?? null,
     ...a,
     prosjekPoena: a.sesija ? a.poena / a.sesija : 0,
     prosjekRiba: a.sesija ? a.riba / a.sesija : 0,
@@ -468,6 +470,13 @@ const el = (tag, cls, html) => {
   return n;
 };
 
+// 'Vlatko Peković' -> 'V. Peković'. Puni inicijali ('VP') se ne razlikuju
+// dovoljno kad u ligi ima 29 takmičara, a prezime staje i na uski ekran.
+function kratkoIme(ime) {
+  const d = String(ime || '').trim().split(/\s+/);
+  return d.length < 2 ? String(ime || '') : d[0].charAt(0) + '. ' + d.slice(1).join(' ');
+}
+
 function promjenaHtml(p) {
   if (p == null) return '<span class="chg flat">novo</span>';
   if (p > 0) return `<span class="chg up">▲ ${p}</span>`;
@@ -475,7 +484,7 @@ function promjenaHtml(p) {
   return '<span class="chg flat">0</span>';
 }
 
-const medalja = i => i === 0 ? 'm1' : i === 1 ? 'm2' : i === 2 ? 'm3' : '';
+const medalja = m => m === 1 ? 'm1' : m === 2 ? 'm2' : m === 3 ? 'm3' : '';
 
 const S = {
   kola: [],
@@ -484,23 +493,107 @@ const S = {
   tab: 'rang',
   round: 0,
   izabrani: [],
-  sort: { key: 'poena', dir: -1 },
+  sort: {},          // {idTabele: {key, dir}}
 };
+
+/* ---------- jedna tabela za cijeli sajt ----------
+   Sortiranje klikom na zaglavlje, zakovane kolone "Mj." i ime pri horizontalnom
+   skrolu, i skraćeno ime na uskom ekranu.
+
+   kolona: { key, lbl, tip, uloga, asc, render, kratko }
+     tip    'txt' | 'int' | 'dec' | 'dec0'
+     uloga  'mjesto' ili 'ime' -> kolona ostaje zakovana pri skrolu
+     asc    prvi klik sortira rastuće (za plasmane, gdje je manje bolje)
+     render funkcija(red) -> HTML ćelije
+     kratko funkcija(red) -> kraća verzija za telefon (podrazumijevano kratkoIme)  */
+
+const FORMAT = {
+  int: v => broj(v),
+  dec: v => dec(v, 1),
+  dec0: v => broj(Math.round(v)),
+  txt: v => v,
+};
+
+function sadrzaj(red, k) {
+  if (k.render) return k.render(red);
+  const v = red[k.key];
+  if (v == null || v === '') return '-';
+  return (FORMAT[k.tip] || FORMAT.txt)(v);
+}
+
+function sortiraj(redovi, kolone, st) {
+  const k = kolone.find(c => c.key === st.key);
+  if (!k) return redovi;
+  return redovi.slice().sort((a, b) => {
+    const x = a[st.key], y = b[st.key];
+    if (k.tip === 'txt') return st.dir * String(x ?? '').localeCompare(String(y ?? ''), 'sr');
+    // prazne vrijednosti idu na kraj bez obzira na smjer sortiranja
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return st.dir * (x - y);
+  });
+}
+
+function klaseKolone(k) {
+  const c = [];
+  if (k.uloga === 'mjesto') c.push('c-pos');
+  if (k.uloga === 'ime') c.push('c-name');
+  if (k.tip !== 'txt' && k.uloga !== 'mjesto') c.push('r');
+  if (k.klasa) c.push(k.klasa);
+  return c.join(' ');
+}
+
+function crtajTabelu(id, prikaz, kolone, redovi, opcije = {}) {
+  if (!S.sort[id]) S.sort[id] = { ...(opcije.pocetni || { key: kolone[0].key, dir: 1 }) };
+  const st = S.sort[id];
+  const poredani = sortiraj(redovi, kolone, st);
+
+  const th = kolone.map(k => {
+    const strelica = st.key === k.key ? (st.dir === 1 ? ' ▲' : ' ▼') : '';
+    return `<th class="${klaseKolone(k)} sortable" data-tabela="${id}" data-prikaz="${prikaz}"` +
+      ` data-key="${k.key}" data-tip="${k.tip}" data-asc="${k.asc ? 1 : 0}"` +
+      ` title="Sortiraj po: ${k.lbl}">${k.lbl}${strelica}</th>`;
+  }).join('');
+
+  const tr = poredani.map(r => {
+    const celije = kolone.map(k => {
+      const puno = sadrzaj(r, k);
+      const unutra = k.uloga === 'ime'
+        ? `<span class="ime-puno">${puno}</span><span class="ime-kratko">${k.kratko ? k.kratko(r) : kratkoIme(puno)}</span>`
+        : puno;
+      return `<td class="${klaseKolone(k)}">${unutra}</td>`;
+    }).join('');
+    return `<tr class="${opcije.klasaReda ? opcije.klasaReda(r) : ''}">${celije}</tr>`;
+  }).join('');
+
+  return `<table class="tbl"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+}
+
+/* ---------- pojedinačno i ekipno ---------- */
+
+const KOL_RANG = [
+  { key: 'mjesto', lbl: 'Mj.', tip: 'int', uloga: 'mjesto', asc: true },
+  { key: 'ime', lbl: 'Ime i prezime', tip: 'txt', uloga: 'ime' },
+  { key: 'klub', lbl: 'Klub', tip: 'txt', render: r => kratkiKlub(r.klub || '-') },
+  { key: 'poena', lbl: 'Poeni', tip: 'int' },
+  { key: 'plasman', lbl: 'Zbir sekt. plasmana', tip: 'int', asc: true },
+  { key: 'promjena', lbl: 'Promjena', tip: 'int', render: r => promjenaHtml(r.promjena) },
+];
+
+const KOL_EKIPNO = [
+  { key: 'mjesto', lbl: 'Mj.', tip: 'int', uloga: 'mjesto', asc: true },
+  { key: 'ime', lbl: 'Klub', tip: 'txt', uloga: 'ime', kratko: r => kratkiKlub(r.ime) },
+  { key: 'poena', lbl: 'Poeni', tip: 'int' },
+  { key: 'plasman', lbl: 'Zbir sekt. plasmana', tip: 'int', asc: true },
+  { key: 'promjena', lbl: 'Promjena', tip: 'int', render: r => promjenaHtml(r.promjena) },
+];
 
 function renderRang() {
   const redovi = saPromjenom(S.sez.snapshots);
-  const tb = $('#rang-body');
-  tb.innerHTML = '';
-  redovi.forEach((r, i) => {
-    const tr = el('tr', medalja(i));
-    tr.innerHTML =
-      `<td class="pos">${r.mjesto}</td>` +
-      `<td><div class="nm">${r.ime}</div><div class="sub">${r.klub || ''}</div></td>` +
-      `<td class="only-wide klub">${r.klub || ''}</td>` +
-      `<td class="r pts">${broj(r.poena)}</td>` +
-      `<td class="r only-wide sec">${r.plasman}</td>` +
-      `<td class="r">${promjenaHtml(r.promjena)}</td>`;
-    tb.appendChild(tr);
+  $('#rang-tabela').innerHTML = crtajTabelu('rang', 'rang', KOL_RANG, redovi, {
+    pocetni: { key: 'mjesto', dir: 1 },
+    klasaReda: r => medalja(r.mjesto),
   });
   $('#rang-sub').textContent = `${redovi.length} takmičara, ${S.sez.kola.length} odigranih kola`;
   $('#legend-kolo').textContent = S.sez.kola.length > 1
@@ -511,20 +604,25 @@ function renderRang() {
 
 function renderEkipno() {
   const redovi = saPromjenom(S.sez.snapshotsEk);
-  const tb = $('#ekipno-body');
-  tb.innerHTML = '';
-  redovi.forEach((r, i) => {
-    const tr = el('tr', medalja(i));
-    tr.innerHTML =
-      `<td class="pos">${r.mjesto}</td>` +
-      `<td><div class="nm">${r.ime}</div></td>` +
-      `<td class="r pts">${broj(r.poena)}</td>` +
-      `<td class="r only-wide sec">${r.plasman}</td>` +
-      `<td class="r">${promjenaHtml(r.promjena)}</td>`;
-    tb.appendChild(tr);
+  $('#ekipno-tabela').innerHTML = crtajTabelu('ekipno', 'ekipno', KOL_EKIPNO, redovi, {
+    pocetni: { key: 'mjesto', dir: 1 },
+    klasaReda: r => medalja(r.mjesto),
   });
   $('#ekipno-sub').textContent = `${redovi.length} klubova`;
 }
+
+/* ---------- kola ---------- */
+
+const KOL_GRUPA = [
+  { key: 'ime', lbl: 'Takmičar', tip: 'txt', uloga: 'ime' },
+  { key: 'klub', lbl: 'Klub', tip: 'txt' },
+  { key: 's1', lbl: 'S1', tip: 'int', asc: true },
+  { key: 's2', lbl: 'S2', tip: 'int', asc: true },
+  { key: 's3', lbl: 'S3', tip: 'int', asc: true },
+  { key: 'riba', lbl: 'Riba', tip: 'int' },
+  { key: 'plasman', lbl: 'Zbir', tip: 'int', asc: true },
+  { key: 'poena', lbl: 'Poeni', tip: 'int' },
+];
 
 function renderKola() {
   const pick = $('#round-picker');
@@ -548,26 +646,21 @@ function renderKola() {
   const gwrap = $('#round-groups');
   gwrap.innerHTML = '';
   for (const gr of [1, 2, 3]) {
-    const redovi = svi.filter(r => r.grupa === gr).sort(poredak);
+    const redovi = svi.filter(r => r.grupa === gr).map(r => ({
+      ime: r.ime,
+      klub: kratkiKlub(r.klub || '-'),
+      s1: r.sesije[0] ? r.sesije[0].plasman : null,
+      s2: r.sesije[1] ? r.sesije[1].plasman : null,
+      s3: r.sesije[2] ? r.sesije[2].plasman : null,
+      riba: zbir(r.riba),
+      plasman: r.plasman,
+      poena: r.poena,
+    }));
     if (!redovi.length) continue;
-    const card = el('div', 'card');
+    const card = el('div', 'card scroll-x');
     card.appendChild(el('div', 'group-title', `Grupa ${RIMSKI[gr]}`));
-    const t = el('table', 'tbl gtbl');
-    t.innerHTML = '<thead><tr><th>Takmičar</th><th class="c">S1</th><th class="c">S2</th><th class="c">S3</th>' +
-      '<th class="c">Riba</th><th class="r">Poeni</th></tr></thead>';
-    const tb = el('tbody');
-    for (const r of redovi) {
-      const s = i => (r.sesije[i] ? r.sesije[i].plasman : '-');
-      const tr = el('tr');
-      tr.innerHTML =
-        `<td><div class="gname">${r.ime}</div><div class="gclub">${kratkiKlub(r.klub || '')}</div></td>` +
-        `<td class="c num">${s(0)}</td><td class="c num">${s(1)}</td><td class="c num">${s(2)}</td>` +
-        `<td class="c num">${zbir(r.riba)}</td>` +
-        `<td class="tot">${broj(r.poena)}</td>`;
-      tb.appendChild(tr);
-    }
-    t.appendChild(tb);
-    card.appendChild(t);
+    card.insertAdjacentHTML('beforeend',
+      crtajTabelu(`grupa-${gr}`, 'kola', KOL_GRUPA, redovi, { pocetni: { key: 'plasman', dir: 1 } }));
     gwrap.appendChild(card);
   }
 
@@ -648,58 +741,24 @@ function crtajTrake(stavke, vrijednost, oznaka) {
   }).join('');
 }
 
-const KOLONE = [
-  { key: 'ime', lbl: 'Takmičar', tip: 'txt' },
-  { key: 'klub', lbl: 'Klub', tip: 'txt', wide: true },
+const KOL_STAT = [
+  { key: 'mjesto', lbl: 'Mj.', tip: 'int', uloga: 'mjesto', asc: true },
+  { key: 'ime', lbl: 'Takmičar', tip: 'txt', uloga: 'ime' },
+  { key: 'klub', lbl: 'Klub', tip: 'txt', render: r => kratkiKlub(r.klub || '-') },
   { key: 'kolaOdigrao', lbl: 'Kola', tip: 'int' },
   { key: 'poena', lbl: 'Poeni', tip: 'int' },
-  { key: 'prosjekPoena', lbl: 'Poeni / sesija', tip: 'dec0', wide: true },
+  { key: 'prosjekPoena', lbl: 'Poeni / sesija', tip: 'dec0' },
   { key: 'riba', lbl: 'Riba', tip: 'int' },
-  { key: 'prosjekRiba', lbl: 'Riba / sesija', tip: 'dec', wide: true },
-  { key: 'najduza', lbl: 'Najduža (cm)', tip: 'int', wide: true },
-  { key: 'najbolje', lbl: 'Najbolji plasman', tip: 'int', wide: true },
-  { key: 'prosjekPlasmana', lbl: 'Prosj. sekt. plasman', tip: 'dec', wide: true },
-  { key: 'nule', lbl: 'Sesija bez ribe', tip: 'int' },
+  { key: 'prosjekRiba', lbl: 'Riba / sesija', tip: 'dec' },
+  { key: 'najduza', lbl: 'Najduža (cm)', tip: 'int' },
+  { key: 'najbolje', lbl: 'Najbolji plasman', tip: 'int', asc: true },
+  { key: 'prosjekPlasmana', lbl: 'Prosj. sekt. plasman', tip: 'dec', asc: true },
+  { key: 'nule', lbl: 'Sesija bez ribe', tip: 'int', asc: true },
 ];
 
-function celija(a, k) {
-  const v = a[k.key];
-  if (v == null) return '-';
-  if (k.tip === 'int') return broj(v);
-  if (k.tip === 'dec') return dec(v, 1);
-  if (k.tip === 'dec0') return broj(Math.round(v));
-  return k.key === 'klub' ? kratkiKlub(v) : v;
-}
-
 function renderTabelaStat() {
-  const { key, dir } = S.sort;
-  const tip = (KOLONE.find(k => k.key === key) || {}).tip;
-  const redovi = S.stat.perTakmicar.slice().sort((a, b) => {
-    const x = a[key], y = b[key];
-    if (tip === 'txt') return dir * String(x).localeCompare(String(y), 'sr');
-    return dir * ((x ?? Infinity * dir) - (y ?? Infinity * dir));
-  });
-
-  const th = KOLONE.map(k => {
-    const strelica = key === k.key ? (dir === -1 ? ' ▼' : ' ▲') : '';
-    return `<th class="${k.tip === 'txt' ? '' : 'r'}${k.wide ? ' only-wide' : ''} sortable" data-key="${k.key}">${k.lbl}${strelica}</th>`;
-  }).join('');
-
-  const tr = redovi.map((a, i) =>
-    `<tr><td class="c-num pos">${i + 1}</td>` +
-    KOLONE.map(k => `<td class="${k.tip === 'txt' ? '' : 'r num'}${k.wide ? ' only-wide' : ''}">${celija(a, k)}</td>`).join('') +
-    '</tr>').join('');
-
   $('#stat-tabela').innerHTML =
-    `<table class="tbl stbl"><thead><tr><th class="c-num">#</th>${th}</tr></thead><tbody>${tr}</tbody></table>`;
-
-  $('#stat-tabela').querySelectorAll('.sortable').forEach(h => {
-    h.onclick = () => {
-      const k = h.dataset.key;
-      S.sort = { key: k, dir: S.sort.key === k ? -S.sort.dir : (k === 'ime' || k === 'klub' ? 1 : -1) };
-      renderTabelaStat();
-    };
-  });
+    crtajTabelu('stat', 'stat', KOL_STAT, S.stat.perTakmicar, { pocetni: { key: 'mjesto', dir: 1 } });
 }
 
 function renderStat() {
@@ -755,7 +814,7 @@ function renderStat() {
   if (r.najDuza && r.najDuza.najduza) rek += karta('Najduža riba sezone', r.najDuza.ime,
     `${r.najDuza.najduza} cm, ${RIMSKI[r.najDuza.kolo] || r.najDuza.kolo} kolo, sesija ${r.najDuza.sesija}`);
   if (r.konstantan) rek += karta('Najkonstantniji takmičar', r.konstantan.ime,
-    `Plasman ${r.konstantan.najbolje}–${r.konstantan.najgore} u svim kolima`);
+    `Plasman od ${r.konstantan.najbolje} do ${r.konstantan.najgore} u svim kolima`);
   if (r.skok) rek += karta('Najveći skok na tabeli', r.skok.ime,
     `Sa ${r.skok.sa}. na ${r.skok.na}. mjesto poslije ${RIMSKI[r.skok.kolo] || r.skok.kolo} kola`);
   $('#stat-cards').innerHTML = rek;
@@ -768,6 +827,9 @@ function renderStat() {
 
   renderTabelaStat();
 }
+
+// koji prikaz se ponovo crta poslije klika na zaglavlje tabele
+const PRIKAZI = { rang: renderRang, ekipno: renderEkipno, kola: renderKola, stat: renderTabelaStat };
 
 /* ---------- tabovi ---------- */
 
@@ -865,6 +927,15 @@ async function primiFajl(f) {
 /* ---------- start ---------- */
 
 if (typeof document !== 'undefined') {
+  document.addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    const { tabela, prikaz, key, tip, asc } = th.dataset;
+    const st = S.sort[tabela];
+    S.sort[tabela] = { key, dir: st && st.key === key ? -st.dir : (tip === 'txt' || asc === '1' ? 1 : -1) };
+    (PRIKAZI[prikaz] || (() => {}))();
+  });
+
   document.getElementById('tabs').addEventListener('click', e => {
     const b = e.target.closest('.tab');
     if (b) prikaziTab(b.dataset.tab);
@@ -895,5 +966,5 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S };
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG };
 }

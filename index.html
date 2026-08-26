@@ -35,42 +35,19 @@
         <h2>Pojedinačni plasman</h2>
         <span class="panel-sub" id="rang-sub"></span>
       </div>
-      <div class="card">
-        <table class="tbl">
-          <thead><tr>
-            <th class="c-num">Mj.</th>
-            <th>Ime i prezime</th>
-            <th class="only-wide">Klub</th>
-            <th class="r">Poeni</th>
-            <th class="r only-wide">Zbir sekt. plasmana</th>
-            <th class="r">Promjena</th>
-          </tr></thead>
-          <tbody id="rang-body"></tbody>
-        </table>
-      </div>
+      <div class="card scroll-x" id="rang-tabela"></div>
       <div class="legend">
         <span><i class="sw sw-1"></i>1. mjesto</span>
         <span><i class="sw sw-2"></i>2. mjesto</span>
         <span><i class="sw sw-3"></i>3. mjesto</span>
         <span><b class="up">▲</b><span id="legend-kolo">napredovao u odnosu na prošlo kolo</span></span>
       </div>
-      <p class="fineprint">Bolji je manji zbir sektorskih plasmana. Kod istog zbira odlučuje veći broj poena. Propušteno kolo nosi 30 kaznenih plasman-poena.</p>
+      <p class="fineprint">Klikni na naslov kolone da promijeniš redosljed. Bolji je manji zbir sektorskih plasmana. Kod istog zbira odlučuje veći broj poena. Propušteno kolo nosi 30 kaznenih plasman-poena.</p>
     </section>
 
     <section class="panel" data-panel="ekipno" hidden>
       <div class="panel-head"><h2>Ekipni plasman</h2><span class="panel-sub" id="ekipno-sub"></span></div>
-      <div class="card">
-        <table class="tbl">
-          <thead><tr>
-            <th class="c-num">Mj.</th>
-            <th>Klub</th>
-            <th class="r">Poeni</th>
-            <th class="r only-wide">Zbir sekt. plasmana</th>
-            <th class="r">Promjena</th>
-          </tr></thead>
-          <tbody id="ekipno-body"></tbody>
-        </table>
-      </div>
+      <div class="card scroll-x" id="ekipno-tabela"></div>
     </section>
 
     <section class="panel" data-panel="kola" hidden>
@@ -109,7 +86,6 @@
       </div>
 
       <h3 class="sub-title">Detaljno po takmičaru</h3>
-      <p class="panel-lead">Klikni na naslov kolone da promijeniš redosljed.</p>
       <div class="card scroll-x" id="stat-tabela"></div>
     </section>
   </main>

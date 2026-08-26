@@ -7,7 +7,8 @@ const path = require('path');
 const assert = require('assert');
 
 global.XLSX = require('./vendor/xlsx.full.min.js');
-const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S } = require('./app.js');
+const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
+        crtajTabelu, kratkoIme, KOL_RANG, saPromjenom } = require('./app.js');
 
 const KOLA = ['data/kolo-1.xlsx', 'data/kolo-2.xlsx', 'data/kolo-3.xlsx'];
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -96,5 +97,40 @@ for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1
   assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'), 'grafikon nije validan SVG');
 }
 console.log('  OK  grafikon: validne koordinate u svim slucajevima');
+
+// zajednicka tabela: sortiranje, zakovane kolone, kratko ime
+assert.strictEqual(kratkoIme('Vlatko Peković'), 'V. Peković');
+assert.strictEqual(kratkoIme('Bogdan Marković'), 'B. Marković');
+assert.strictEqual(kratkoIme('Pele'), 'Pele', 'jednorječno ime ostaje kakvo jeste');
+
+const redovi = saPromjenom(sez.snapshots);
+const imenaIz = html => [...html.matchAll(/<span class="ime-puno">([^<]+)</g)].map(m => m[1]);
+
+S.sort = {};
+const podrazumijevana = crtajTabelu('t', 'rang', KOL_RANG, redovi, { pocetni: { key: 'mjesto', dir: 1 } });
+assert.deepStrictEqual(imenaIz(podrazumijevana), redovi.map(r => r.ime), 'podrazumijevano ide po mjestu');
+assert.ok(podrazumijevana.includes('class="c-pos sortable"'), 'kolona Mj. je zakovana');
+assert.ok(podrazumijevana.includes('class="c-name sortable"'), 'kolona imena je zakovana');
+assert.ok(podrazumijevana.includes('<span class="ime-kratko">'), 'svaki red nosi i kratku verziju imena');
+
+S.sort.t = { key: 'poena', dir: -1 };
+const poPoenima = imenaIz(crtajTabelu('t', 'rang', KOL_RANG, redovi));
+const ocekivano = redovi.slice().sort((a, b) => b.poena - a.poena).map(r => r.ime);
+assert.deepStrictEqual(poPoenima, ocekivano, 'sortiranje po poenima opadajuce');
+
+S.sort.t = { key: 'ime', dir: 1 };
+const poImenu = imenaIz(crtajTabelu('t', 'rang', KOL_RANG, redovi));
+assert.deepStrictEqual(poImenu, redovi.map(r => r.ime).sort((a, b) => a.localeCompare(b, 'sr')), 'sortiranje po imenu');
+
+// prazne vrijednosti (npr. 'novo' u koloni Promjena) uvijek idu na kraj
+for (const dir of [1, -1]) {
+  S.sort.t = { key: 'promjena', dir };
+  const html = crtajTabelu('t', 'rang', KOL_RANG, redovi);
+  const nizNovih = [...html.matchAll(/chg (flat|up|down)">(novo)?/g)].map(m => !!m[2]);
+  const prvoNovo = nizNovih.indexOf(true);
+  if (prvoNovo >= 0) assert.ok(nizNovih.slice(prvoNovo).every(Boolean), 'prazne vrijednosti idu na kraj');
+}
+S.sort = {};
+console.log('  OK  zajednicka tabela: sortiranje, zakovane kolone, kratko ime');
 
 console.log(`\nSve provjere prošle (${ok} poređenih redova).`);
