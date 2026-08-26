@@ -7,7 +7,7 @@ const path = require('path');
 const assert = require('assert');
 
 global.XLSX = require('./vendor/xlsx.full.min.js');
-const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika } = require('./app.js');
+const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S } = require('./app.js');
 
 const KOLA = ['data/kolo-1.xlsx', 'data/kolo-2.xlsx', 'data/kolo-3.xlsx'];
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -85,5 +85,16 @@ for (const t of st.perTakmicar) {
 }
 assert.ok(st.rekordi.najSesija && st.rekordi.najRiba, 'rekordi sezone su izračunati');
 console.log(`  OK  statistika: ${st.perTakmicar.length} takmičara, ${st.perKlub.length} klubova, ${st.ukupno.riba} riba`);
+
+// grafikon: nikad NaN u koordinatama, ni kad su svi izabrani na istom mjestu
+S.sez = sez;
+const mape = sez.snapshots.map(sn => new Map(sn.map((v, i) => [v.kljuc, i + 1])));
+const svi = sez.snapshots[2].map(v => ({ kljuc: v.kljuc, ime: v.ime, v: mape.map(m => m.get(v.kljuc) ?? null) }));
+for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1] }], []]) {
+  const svg = crtajLinije(slucaj, svi.length);
+  assert.ok(!/NaN|Infinity|undefined/.test(svg), 'grafikon ima nevalidnu koordinatu');
+  assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'), 'grafikon nije validan SVG');
+}
+console.log('  OK  grafikon: validne koordinate u svim slucajevima');
 
 console.log(`\nSve provjere prošle (${ok} poređenih redova).`);

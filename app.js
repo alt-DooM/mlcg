@@ -594,29 +594,48 @@ function serije() {
 }
 
 function crtajLinije(izabrane, maxRank) {
-  const W = 860, H = 420, L = 70, R = 840, T = 30, B = 350;
   const n = S.sez.kola.length;
+  const W = 1000, H = 430, L = 96, R = W - 104, T = 54, B = H - 70;
+
+  // Y osa se skuplja na izabrane takmicare. Bez toga tri linije iz vrha plutaju
+  // u praznoj tabeli od 29 mjesta i ne vidi se nikakva razlika medju njima.
+  const sve = izabrane.flatMap(x => x.v.filter(p => p != null));
+  let lo = sve.length ? Math.max(1, Math.min(...sve) - 1) : 1;
+  let hi = sve.length ? Math.min(maxRank, Math.max(...sve) + 1) : maxRank;
+  if (hi - lo < 3) hi = Math.min(maxRank, lo + 3);
+  if (hi - lo < 3) lo = Math.max(1, hi - 3);
+
   const xOf = i => n === 1 ? (L + R) / 2 : L + i * ((R - L) / (n - 1));
-  const yOf = p => T + (p - 1) * ((B - T) / Math.max(1, maxRank - 1));
-  const korak = Math.max(1, Math.ceil(maxRank / 8));
+  const yOf = p => T + (p - lo) * ((B - T) / Math.max(1, hi - lo));
+  const korak = Math.max(1, Math.ceil((hi - lo + 1) / 9));
 
   let g = '';
-  for (let p = 1; p <= maxRank; p += korak) {
+  g += `<text x="${L - 18}" y="${T - 24}" text-anchor="end" style="font:600 15px Archivo,sans-serif;fill:#1f7a4d">bolje</text>`;
+  g += `<text x="${L - 18}" y="${B + 30}" text-anchor="end" style="font:600 15px Archivo,sans-serif;fill:#b23b2e">slabije</text>`;
+
+  for (let p = lo; p <= hi; p += korak) {
     g += `<line x1="${L}" x2="${R}" y1="${yOf(p)}" y2="${yOf(p)}" stroke="#ece7dd" stroke-width="2"/>` +
-      `<text x="${L - 14}" y="${yOf(p) + 6}" text-anchor="end" style="font:500 17px Archivo,sans-serif;fill:#8b9295">${p}.</text>`;
+      `<text x="${L - 18}" y="${yOf(p) + 6}" text-anchor="end" style="font:600 17px Archivo,sans-serif;fill:#8b9295">${p}.</text>`;
   }
+  // uspravne linije kola, da se vidi gdje se cita koja tacka
   S.sez.kola.forEach((k, i) => {
-    g += `<text x="${xOf(i)}" y="${H - 12}" text-anchor="middle" style="font:600 18px Archivo,sans-serif;fill:#3d5157">${RIMSKI[k.kolo] || k.kolo} kolo</text>`;
+    g += `<line x1="${xOf(i)}" x2="${xOf(i)}" y1="${T - 10}" y2="${B + 10}" stroke="#f3efe7" stroke-width="2"/>` +
+      `<text x="${xOf(i)}" y="${H - 22}" text-anchor="middle" style="font:600 18px Archivo,sans-serif;fill:#3d5157">${RIMSKI[k.kolo] || k.kolo} kolo</text>`;
   });
-  izabrane.forEach((s, si) => {
+
+  izabrane.forEach((serija, si) => {
     const boja = BOJE[si % BOJE.length];
-    const tacke = s.v.map((p, i) => p == null ? null : [xOf(i), yOf(p)]).filter(Boolean);
+    const tacke = serija.v.map((p, i) => p == null ? null : { x: xOf(i), y: yOf(p), p }).filter(Boolean);
     if (tacke.length > 1) {
-      g += `<polyline points="${tacke.map(t => t.join(',')).join(' ')}" fill="none" stroke="${boja}" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>`;
+      g += `<polyline points="${tacke.map(t => t.x + ',' + t.y).join(' ')}" fill="none" stroke="${boja}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
-    for (const [x, y] of tacke) g += `<circle cx="${x}" cy="${y}" r="9" fill="#fff" stroke="${boja}" stroke-width="5"/>`;
+    for (const t of tacke) {
+      g += `<circle cx="${t.x}" cy="${t.y}" r="17" fill="#fff" stroke="${boja}" stroke-width="4"/>` +
+        `<text x="${t.x}" y="${t.y + 6}" text-anchor="middle" style="font:700 16px Archivo,sans-serif;fill:${boja}">${t.p}</text>`;
+    }
   });
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Kretanje plasmana kroz sezonu">${g}</svg>`;
+
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mjesto na rang listi poslije svakog kola">${g}</svg>`;
 }
 
 function crtajTrake(stavke, vrijednost, oznaka) {
@@ -876,5 +895,5 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid };
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S };
 }
