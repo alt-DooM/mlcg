@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="sr-Latn-ME">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mušičarska liga Crne Gore</title>
+<meta name="description" content="Rang lista, ekipni plasman i statistika Mušičarske lige Crne Gore.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="shell">
+  <header class="hero">
+    <div class="hero-kicker"><span class="dot"></span>Savez sportsko ribolovnih organizacija Crne Gore</div>
+    <h1>Mušičarska liga Crne Gore <span id="hero-godina"></span></h1>
+    <div class="hero-badge" id="hero-badge">Učitavanje rezultata...</div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" class="tab is-active" data-tab="rang">Rang lista</button>
+    <button type="button" class="tab" data-tab="ekipno">Ekipno</button>
+    <button type="button" class="tab" data-tab="kola">Kola</button>
+    <button type="button" class="tab" data-tab="stat">Statistika</button>
+  </nav>
+
+  <main class="content">
+    <div id="loader" class="notice">Učitavanje rezultata...</div>
+    <div id="fatal" class="notice notice-bad" hidden></div>
+
+    <section class="panel" data-panel="rang" hidden>
+      <div class="panel-head">
+        <h2>Pojedinačni plasman</h2>
+        <span class="panel-sub" id="rang-sub"></span>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr>
+            <th class="c-num">Mj.</th>
+            <th>Ime i prezime</th>
+            <th class="only-wide">Klub</th>
+            <th class="r">Poeni</th>
+            <th class="r only-wide">Zbir sekt. plasmana</th>
+            <th class="r">Promjena</th>
+          </tr></thead>
+          <tbody id="rang-body"></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span><i class="sw sw-1"></i>1. mjesto</span>
+        <span><i class="sw sw-2"></i>2. mjesto</span>
+        <span><i class="sw sw-3"></i>3. mjesto</span>
+        <span><b class="up">▲</b><span id="legend-kolo">napredovao u odnosu na prošlo kolo</span></span>
+      </div>
+      <p class="fineprint">Bolji je manji zbir sektorskih plasmana. Kod istog zbira odlučuje veći broj poena. Propušteno kolo nosi 30 kaznenih plasman-poena.</p>
+    </section>
+
+    <section class="panel" data-panel="ekipno" hidden>
+      <div class="panel-head"><h2>Ekipni plasman</h2><span class="panel-sub" id="ekipno-sub"></span></div>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr>
+            <th class="c-num">Mj.</th>
+            <th>Klub</th>
+            <th class="r">Poeni</th>
+            <th class="r only-wide">Zbir sekt. plasmana</th>
+            <th class="r">Promjena</th>
+          </tr></thead>
+          <tbody id="ekipno-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel" data-panel="kola" hidden>
+      <h2 class="panel-title">Izaberi kolo</h2>
+      <div class="round-picker" id="round-picker"></div>
+      <div class="round-head" id="round-head"></div>
+      <div class="groups" id="round-groups"></div>
+      <div class="best" id="round-best"></div>
+    </section>
+
+    <section class="panel" data-panel="stat" hidden>
+      <h2 class="panel-title">Sezona u brojkama</h2>
+      <div class="kpi-grid" id="stat-kpi"></div>
+
+      <h3 class="sub-title">Kretanje plasmana kroz sezonu</h3>
+      <p class="panel-lead">Klikni na imena, do pet takmičara odjednom na grafikonu.</p>
+      <div class="chips" id="stat-chips"></div>
+      <div class="card card-pad">
+        <div id="stat-chart"></div>
+        <div class="chart-legend" id="stat-legend"></div>
+      </div>
+
+      <h3 class="sub-title">Rekordi sezone</h3>
+      <div class="stat-cards" id="stat-cards"></div>
+
+      <h3 class="sub-title">Klubovi</h3>
+      <div class="bars-grid">
+        <div class="card card-pad">
+          <div class="bars-title">Prosjek poena po sesiji</div>
+          <div id="klub-poeni"></div>
+        </div>
+        <div class="card card-pad">
+          <div class="bars-title">Ukupno ulovljenih riba</div>
+          <div id="klub-riba"></div>
+        </div>
+      </div>
+
+      <h3 class="sub-title">Detaljno po takmičaru</h3>
+      <p class="panel-lead">Klikni na naslov kolone da promijeniš redosljed.</p>
+      <div class="card scroll-x" id="stat-tabela"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-left">
+      <span class="foot-logo">MLCG</span>
+      <span>Podaci: Savez sportsko ribolovnih organizacija Crne Gore</span>
+    </div>
+    <button type="button" class="ghost-btn" id="open-modal">Dodaj kolo</button>
+  </footer>
+</div>
+
+<div class="modal-wrap" id="modal" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h3>Dodaj kolo</h3>
+        <p>Prevuci Excel fajl sa rezultatima kola da odmah vidiš kako izgleda rang lista sa njim.</p>
+      </div>
+      <button type="button" class="x-btn" id="close-modal" aria-label="Zatvori">✕</button>
+    </div>
+    <div class="drop" id="drop">
+      <div class="drop-title">Prevuci Excel fajl kola ovdje</div>
+      <div class="drop-sub">.xlsx ili .xls</div>
+      <button type="button" class="primary-btn" id="pick">Izaberi fajl sa računara</button>
+      <input type="file" id="file" accept=".xlsx,.xls" hidden>
+    </div>
+    <div class="status" id="status" hidden></div>
+    <div class="modal-help">
+      <b>Da kolo trajno ostane na sajtu:</b> preimenuj fajl u <code id="next-name">kolo-4.xlsx</code>, otvori
+      <a href="#" id="repo-link" target="_blank" rel="noopener">folder <code>data</code> na GitHub-u</a>,
+      klikni <i>Add file &gt; Upload files</i>, prevuci fajl i klikni <i>Commit changes</i>. Sajt se sam osvježi za minut-dva.
+    </div>
+  </div>
+</div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
