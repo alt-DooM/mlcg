@@ -15,6 +15,8 @@
   --flat:#8b9295;
 }
 *{box-sizing:border-box}
+/* hidden atribut mora da pobijedi display iz klase (npr. .modal-wrap{display:flex}) */
+[hidden]{display:none !important}
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0;background:var(--bg);

@@ -865,6 +865,7 @@ if (typeof document !== 'undefined') {
   $('#open-modal').onclick = () => { modal.hidden = false; $('#status').hidden = true; };
   $('#close-modal').onclick = () => { modal.hidden = true; };
   modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.hidden = true; });
   $('#pick').onclick = () => file.click();
   file.onchange = () => primiFajl(file.files[0]);
   drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('is-over'); });
