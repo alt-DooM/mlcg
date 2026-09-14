@@ -26,6 +26,10 @@ na vrhu `app.js`. To je link koji vodi na `data/` folder iz modala "Dodaj kolo".
 
 ## Šta se čita iz Excel fajla
 
+Novi način pisanja naziva kluba (savez ga mijenja iz kola u kolo) mora se dodati
+u `KLUB_ALIASI` u `app.js`, inače se isti klub pojavi dvaput u ekipnoj tabeli.
+U IV kolu se tako pojavilo `SRK PLAVSKO JEZERO - PLAV` umjesto `SRK PLAVSKO JEZERO`.
+
 | Sheet | Šta se uzima |
 |---|---|
 | `TABELA` | broj kola, mjesto, datum, žrijeb (koji takmičar je u kojoj grupi) i klubovi |

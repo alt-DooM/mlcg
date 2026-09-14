@@ -20,7 +20,7 @@ const KLUB_ALIASI = {
   'SRK Lim - Berane':              ['SRK LIM - BERANE', 'SRK LIM BA'],
   'SRK Lim - Andrijevica':         ['SRK LIM AN', 'SRK LIM - ANDRIJEVICA'],
   'SRFFK Maniro - Kolašin':        ['SRFFK MANIRO', 'SRFFK MANIRO - KOLAŠIN'],
-  'SRK Plavsko jezero':            ['SRK PLAVSKO JEZERO'],
+  'SRK Plavsko jezero - Plav':     ['SRK PLAVSKO JEZERO', 'SRK PLAVSKO JEZERO - PLAV'],
   'SRK Tara - Mojkovac':           ['SRK TARA - MOJKOVAC', 'SRK TARA MK'],
   'SRK EPCG':                      ['SRK EPCG'],
 };
@@ -287,6 +287,27 @@ function rezultatiKola(kolo, pojedinacno) {
 // Manji zbir sektorskih plasmana je bolji; kod istog zbira odlučuje više poena.
 const poredak = (a, b) => (a.plasman - b.plasman) || (b.poena - a.poena);
 
+/* Ekipni rezultat jednog kola: {klubKljuc: {ime, poena, plasman, takmicari}}.
+   Prazan slot u ekipi (nema takmičara u grupi) nosi 0 poena i 3 x broj ekipa
+   plasman-poena, isto kao u zvaničnom EKIPNI PLASMAN sheetu saveza. */
+function rezultatiEkipno(kolo) {
+  const maxNeg = kolo.ekipe.length;
+  const out = new Map();
+  for (const e of kolo.ekipe) {
+    const klub = kanonKlub(e.klub);
+    let poena = 0, plasman = 0;
+    const takmicari = [];
+    for (const gr of [1, 2, 3]) {
+      const ime = e.grupe[gr];
+      const r = ime ? kolo.rezultati.get(kljuc(ime)) : null;
+      if (r) { poena += r.poena; plasman += r.plasman; takmicari.push(r); }
+      else plasman += 3 * maxNeg;
+    }
+    out.set(kljuc(klub), { ime: klub, poena, plasman, takmicari });
+  }
+  return out;
+}
+
 function sezona(kola) {
   kola = kola.slice().sort((a, b) => (a.kolo || 0) - (b.kolo || 0));
 
@@ -315,21 +336,10 @@ function sezona(kola) {
       }
     }
 
-    // ekipno: prazan slot u ekipi = 0 poena, 3 x broj ekipa plasmana
-    const maxNeg = kolo.ekipe.length;
-    for (const e of kolo.ekipe) {
-      const klub = kanonKlub(e.klub);
-      let poena = 0, plasman = 0;
-      for (const gr of [1, 2, 3]) {
-        const ime = e.grupe[gr];
-        const r = ime ? rk.get(kljuc(ime)) : null;
-        if (r) { poena += r.poena; plasman += r.plasman; }
-        else plasman += 3 * maxNeg;
-      }
-      const kk = kljuc(klub);
-      if (!ukEk.has(kk)) ukEk.set(kk, { kljuc: kk, ime: klub, poena: 0, plasman: 0 });
+    for (const [kk, v] of rezultatiEkipno(kolo)) {
+      if (!ukEk.has(kk)) ukEk.set(kk, { kljuc: kk, ime: v.ime, poena: 0, plasman: 0 });
       const z = ukEk.get(kk);
-      z.ime = klub; z.poena += poena; z.plasman += plasman;
+      z.ime = v.ime; z.poena += v.poena; z.plasman += v.plasman;
     }
 
     snapshots.push([...uk.values()].map(v => ({ ...v })).sort(poredak));
@@ -408,19 +418,44 @@ function statistika(sez) {
     raspon: a.mjesta.length ? Math.max(...a.mjesta.map(m => m.mjesto)) - Math.min(...a.mjesta.map(m => m.mjesto)) : null,
   }));
 
-  // klubovi
+  // klubovi: sve se skuplja po kolima, sa pripadnoscu kluba iz tog kola,
+  // a ne iz zadnjeg, da promjena kluba usred sezone ne pomjeri istoriju
   const kl = new Map();
-  for (const a of perTakmicar) {
-    if (!a.klub) continue;
-    const k = kljuc(a.klub);
-    if (!kl.has(k)) kl.set(k, { ime: a.klub, poena: 0, riba: 0, takmicara: 0, sesija: 0 });
-    const c = kl.get(k);
-    c.poena += a.poena; c.riba += a.riba; c.takmicara++; c.sesija += a.sesija;
+  for (const kolo of kola) {
+    const ekipno = [...rezultatiEkipno(kolo).entries()]
+      .map(([kk, v]) => ({ kk, ...v }))
+      .sort(poredak);
+    ekipno.forEach((e, i) => {
+      if (!kl.has(e.kk)) {
+        kl.set(e.kk, {
+          kljuc: e.kk, ime: e.ime, kolaOdigrao: 0, poena: 0, plasman: 0,
+          riba: 0, sesija: 0, nule: 0, najduza: 0, mjesta: [], imena: new Set(),
+        });
+      }
+      const c = kl.get(e.kk);
+      c.ime = e.ime;
+      c.kolaOdigrao++;
+      c.poena += e.poena;
+      c.plasman += e.plasman;
+      c.mjesta.push(i + 1);
+      for (const r of e.takmicari) {
+        c.imena.add(r.kljuc);
+        c.riba += zbir(r.riba);
+        c.sesija += 3;
+        c.nule += r.riba.filter(x => x === 0).length;
+        c.najduza = Math.max(c.najduza, ...r.najduza);
+      }
+    });
   }
+  const krajnjaEkipna = mjesta(sez.snapshotsEk[sez.snapshotsEk.length - 1] || []);
   const perKlub = [...kl.values()].map(c => ({
     ...c,
+    mjesto: krajnjaEkipna.get(c.kljuc) ?? null,
+    takmicara: c.imena.size,
     prosjekPoSesiji: c.sesija ? c.poena / c.sesija : 0,
     prosjekRibaPoSesiji: c.sesija ? c.riba / c.sesija : 0,
+    najbolje: c.mjesta.length ? Math.min(...c.mjesta) : null,
+    najgore: c.mjesta.length ? Math.max(...c.mjesta) : null,
   })).sort((a, b) => b.prosjekPoSesiji - a.prosjekPoSesiji);
 
   // rekordi
@@ -776,9 +811,33 @@ const KOL_STAT = [
   { key: 'nule', lbl: 'Sesija bez ribe', tip: 'int', asc: true },
 ];
 
+const KOL_KLUB = [
+  { key: 'mjesto', lbl: 'Mj.', tip: 'int', uloga: 'mjesto', asc: true },
+  { key: 'ime', lbl: 'Klub', tip: 'txt', uloga: 'ime', kratko: r => kratkiKlub(r.ime) },
+  { key: 'kolaOdigrao', lbl: 'Kola', tip: 'int' },
+  { key: 'takmicara', lbl: 'Takmičara', tip: 'int' },
+  { key: 'poena', lbl: 'Poeni', tip: 'int' },
+  { key: 'prosjekPoSesiji', lbl: 'Poeni / sesija', tip: 'dec0' },
+  { key: 'plasman', lbl: 'Zbir sekt. plasmana', tip: 'int', asc: true },
+  { key: 'riba', lbl: 'Riba', tip: 'int' },
+  { key: 'prosjekRibaPoSesiji', lbl: 'Riba / sesija', tip: 'dec' },
+  { key: 'najduza', lbl: 'Najduža (cm)', tip: 'int' },
+  { key: 'najbolje', lbl: 'Najbolje u kolu', tip: 'int', asc: true },
+  { key: 'najgore', lbl: 'Najgore u kolu', tip: 'int', asc: true },
+  { key: 'nule', lbl: 'Sesija bez ribe', tip: 'int', asc: true },
+];
+
 function renderTabelaStat() {
   $('#stat-tabela').innerHTML =
     crtajTabelu('stat', 'stat', KOL_STAT, S.stat.perTakmicar, { pocetni: { key: 'mjesto', dir: 1 } });
+}
+
+function renderTabelaKlub() {
+  $('#klub-tabela').innerHTML =
+    crtajTabelu('statKlub', 'statKlub', KOL_KLUB, S.stat.perKlub, {
+      pocetni: { key: 'mjesto', dir: 1 },
+      klasaReda: r => medalja(r.mjesto),
+    });
 }
 
 function renderStat() {
@@ -845,11 +904,13 @@ function renderStat() {
   $('#klub-riba').innerHTML = crtajTrake(
     S.stat.perKlub.slice().sort((a, b) => b.riba - a.riba), k => k.riba, k => broj(k.riba));
 
+  renderTabelaKlub();
   renderTabelaStat();
 }
 
 // koji prikaz se ponovo crta poslije klika na zaglavlje tabele
-const PRIKAZI = { rang: renderRang, ekipno: renderEkipno, kola: renderKola, stat: renderTabelaStat };
+const PRIKAZI = { rang: renderRang, ekipno: renderEkipno, kola: renderKola,
+  stat: renderTabelaStat, statKlub: renderTabelaKlub };
 
 /* ---------- tabovi ---------- */
 
@@ -994,5 +1055,5 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG };
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno };
 }
