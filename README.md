@@ -39,6 +39,25 @@ U IV kolu se tako pojavilo `SRK PLAVSKO JEZERO - PLAV` umjesto `SRK PLAVSKO JEZE
 Ako fajl nema `POJEDINACNO`, plasmani se računaju iz poena (0 poena = zadnje mjesto
 u grupi), isto kao rezervni put u `popuni_tabelu.py`. Sajt u tom slučaju to i napiše.
 
+## Sudijske kazne
+
+Fajl saveza ne nosi sudijske kazne (žuti karton i slično), a zvanični dokument
+koji savez objavi poslije kola ih ima. Zato kazne stoje u `data/kazne.json`:
+
+```json
+{ "kolo": 4, "takmicar": "NIKOLA TREBJEŠANIN", "plasman": 5, "razlog": "Žuti karton" }
+```
+
+`plasman` je broj sektorskih plasman-poena koji se **dodaje** takmičaru u tom kolu.
+Ekipni plasman kluba se sam popravi, jer se računa iz rezultata njegovih takmičara.
+
+Kazna namjerno nije upisana u sam xlsx: ako neko kasnije ponovo uploaduje
+originalni fajl saveza, kazna bi nestala bez traga. Ovako preživi.
+
+Ime se uparuje bez kvačica i viška razmaka. Ako se ne pronađe u tom kolu, sajt
+ispiše upozorenje u konzoli browsera i ne mijenja ništa. Takmičar sa kaznom
+dobija zvjezdicu uz ime, a ispod tabela tog kola piše razlog.
+
 ## Pravila obračuna
 
 Ista kao u `popuni_tabelu.py`:

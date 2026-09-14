@@ -121,6 +121,7 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr));gap:20px;margin:20px 0 0}
 
 /* ---------- zajednicka tabela: sortiranje, zakovane kolone, kratko ime ---------- */
+.tbl .kazna{color:var(--accent);font-weight:700;cursor:help}
 .tbl th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 .tbl th.sortable:hover{color:var(--teal)}
 .tbl td{white-space:nowrap}

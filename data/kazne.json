@@ -1,0 +1,11 @@
+{
+  "napomena": "Sudijske kazne koje fajl saveza ne nosi. 'plasman' je broj sektorskih plasman-poena koji se DODAJE takmicaru u tom kolu. Ime se uparuje bez kvacica i viska razmaka, kao i svugdje na sajtu. Ako se ime ne pronadje u tom kolu, sajt ispise upozorenje u konzoli i nista ne mijenja.",
+  "kazne": [
+    {
+      "kolo": 4,
+      "takmicar": "NIKOLA TREBJEŠANIN",
+      "plasman": 5,
+      "razlog": "Žuti karton"
+    }
+  ]
+}

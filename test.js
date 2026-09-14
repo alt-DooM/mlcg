@@ -12,7 +12,7 @@ const assert = require('assert');
 
 global.XLSX = require('./vendor/xlsx.full.min.js');
 const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
-        crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno } = require('./app.js');
+        crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -36,7 +36,9 @@ function referenca(g, jeKlub) {
   return out;
 }
 
+const KAZNE = JSON.parse(fs.readFileSync('data/kazne.json', 'utf8')).kazne;
 const kola = KOLA.map(p => parsirajKolo(new Uint8Array(fs.readFileSync(p)), p));
+kola.forEach(k => primijeniKazne(k, KAZNE));
 const sez = sezona(kola);
 const zadnji = sez.snapshots.length - 1;
 
@@ -72,14 +74,9 @@ for (const [sheet, nas] of [['Rang lista', sez3.snapshots[2]], ['Ekipni plasman'
    Prepisano iz 'EKIPNO i POJEDINACNO IV KOLO - MLCG.docx'. To je plasman
    SAMO za IV kolo, ne kumulativno.
 
-   ZNANO NESLAGANJE: dokument vodi Nikolu Trebješanina sa 19 sektorskih bodova
-   i zvjezdicom pored imena, a xlsx sa 14 (9+2+3). Razlika od 5 je sudijska
-   kazna koju xlsx ne nosi. Ista razlika ide i na njegov klub, SRK Gorštak
-   (45 u xlsx-u, 50 u dokumentu), i mijenja mu mjesto u kolu sa 5. na 6.
-   Dok savez ne razjasni, sajt računa po xlsx-u, kao i sva ranija kola.
-   Kad se razjasni: ispravi xlsx ili unesi kaznu, pa ovdje obriši KAZNA_IV. */
-
-const KAZNA_IV = { takmicar: 'NIKOLA TREBJESANIN', klub: 'SRK GORSTAK - KOLASIN', kazna: 5 };
+   Nikola Trebješanin je u IV kolu dobio žuti karton i 5 kaznenih plasman-poena.
+   Fajl saveza to ne nosi (xlsx ima 14, dokument 19), pa kazna stoji u
+   data/kazne.json. Poslije njene primjene sve se poklapa red po red. */
 
 const REF_IV_POJEDINACNO = [
   ['IVICA RAJKOVIĆ', 10460, 4], ['PETAR OBRADOVIĆ', 10220, 5], ['BOŠKO VULEVIĆ', 9280, 6],
@@ -106,8 +103,7 @@ for (const [ime, poena, plasman] of REF_IV_POJEDINACNO) {
   const r = kolo4.rezultati.get(kljuc(ime));
   assert.ok(r, `IV kolo: '${ime}' nije nađen u xlsx-u`);
   assert.strictEqual(r.poena, poena, `IV kolo: '${ime}' poeni (naš ${r.poena}, savez ${poena})`);
-  const ocekivano = kljuc(ime) === KAZNA_IV.takmicar ? plasman - KAZNA_IV.kazna : plasman;
-  assert.strictEqual(r.plasman, ocekivano, `IV kolo: '${ime}' plasman (naš ${r.plasman}, ocekivano ${ocekivano})`);
+  assert.strictEqual(r.plasman, plasman, `IV kolo: '${ime}' plasman (naš ${r.plasman}, savez ${plasman})`);
   poredjeno++;
 }
 
@@ -116,11 +112,23 @@ for (const [ime, poena, plasman] of REF_IV_EKIPNO) {
   const e = ekipno4.get(kljuc(kanonKlub(ime)));
   assert.ok(e, `IV kolo ekipno: '${ime}' nije nađen`);
   assert.strictEqual(e.poena, poena, `IV kolo ekipno: '${ime}' poeni (naš ${e.poena}, savez ${poena})`);
-  const ocekivano = kljuc(ime) === KAZNA_IV.klub ? plasman - KAZNA_IV.kazna : plasman;
-  assert.strictEqual(e.plasman, ocekivano, `IV kolo ekipno: '${ime}' plasman (naš ${e.plasman}, ocekivano ${ocekivano})`);
+  assert.strictEqual(e.plasman, plasman, `IV kolo ekipno: '${ime}' plasman (naš ${e.plasman}, savez ${plasman})`);
   poredjeno++;
 }
-console.log(`  OK  IV kolo protiv dokumenta saveza: ${poredjeno} redova (uz znanu kaznu od ${KAZNA_IV.kazna})`);
+// kazna je stvarno primijenjena i vidi se na takmičaru
+const kaznjen = kolo4.rezultati.get(kljuc('NIKOLA TREBJEŠANIN'));
+assert.strictEqual(kaznjen.kazna, 5, 'kazna iz kazne.json mora biti primijenjena');
+assert.strictEqual(kolo4.kazne.length, 1, 'IV kolo ima tačno jednu kaznu');
+// kazna se ne smije primijeniti dvaput
+const ponovo = parsirajKolo(new Uint8Array(fs.readFileSync(KOLA[3])), 'x');
+primijeniKazne(ponovo, KAZNE);
+assert.strictEqual(ponovo.rezultati.get(kljuc('NIKOLA TREBJEŠANIN')).plasman, kaznjen.plasman,
+  'ponovno parsiranje daje isti rezultat');
+// kazna na nepoznato ime ne smije nista da promijeni
+const nepostojeci = parsirajKolo(new Uint8Array(fs.readFileSync(KOLA[3])), 'x');
+primijeniKazne(nepostojeci, [{ kolo: 4, takmicar: 'NEKO KOGA NEMA', plasman: 99 }]);
+assert.strictEqual(nepostojeci.kazne.length, 0, 'kazna na nepoznato ime se preskace');
+console.log(`  OK  IV kolo protiv dokumenta saveza: ${poredjeno} redova, kazna primijenjena`);
 
 /* --- 3. aliasi i ključevi --- */
 

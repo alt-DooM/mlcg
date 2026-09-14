@@ -282,6 +282,29 @@ function rezultatiKola(kolo, pojedinacno) {
   return out;
 }
 
+/* Sudijske kazne iz data/kazne.json. Fajl saveza ih ne nosi (vidi IV kolo i
+   žuti karton Nikole Trebješanina), a zvanični dokument ih ima. Drže se odvojeno
+   da prežive ponovni upload originalnog xlsx-a. Zove se tačno jednom po kolu,
+   odmah poslije parsiranja, jer sabira na postojeći plasman. */
+function primijeniKazne(kolo, kazne) {
+  const primijenjene = [];
+  for (const k of (kazne || [])) {
+    if (Number(k.kolo) !== Number(kolo.kolo)) continue;
+    const r = kolo.rezultati.get(kljuc(k.takmicar));
+    if (!r) {
+      console.warn(`Kazna za "${k.takmicar}" u ${k.kolo}. kolu: takmičar nije nađen, kazna nije primijenjena.`);
+      continue;
+    }
+    const d = Number(k.plasman || 0);
+    r.plasman += d;
+    r.kazna = (r.kazna || 0) + d;
+    r.razlogKazne = k.razlog || '';
+    primijenjene.push({ ime: r.ime, plasman: d, razlog: k.razlog || '' });
+  }
+  kolo.kazne = primijenjene;
+  return primijenjene;
+}
+
 /* ---------- sezona ---------- */
 
 // Manji zbir sektorskih plasmana je bolji; kod istog zbira odlučuje više poena.
@@ -528,6 +551,7 @@ const S = {
   tab: 'rang',
   round: 0,
   izabrani: [],
+  kazne: [],
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -594,8 +618,11 @@ function crtajTabelu(id, prikaz, kolone, redovi, opcije = {}) {
   const tr = poredani.map(r => {
     const celije = kolone.map(k => {
       const puno = sadrzaj(r, k);
+      // red sa sudijskom kaznom dobija zvjezdicu uz ime, kao i u dokumentu saveza
+      const zvjezdica = k.uloga === 'ime' && r.kazna
+        ? ` <span class="kazna" title="${r.razlogKazne || 'Sudijska kazna'}: +${r.kazna} plasman-poena">*</span>` : '';
       const unutra = k.uloga === 'ime'
-        ? `<span class="ime-puno">${puno}</span><span class="ime-kratko">${k.kratko ? k.kratko(r) : kratkoIme(puno)}</span>`
+        ? `<span class="ime-puno">${puno}</span><span class="ime-kratko">${k.kratko ? k.kratko(r) : kratkoIme(puno)}</span>${zvjezdica}`
         : puno;
       return `<td class="${klaseKolone(k)}">${unutra}</td>`;
     }).join('');
@@ -690,6 +717,8 @@ function renderKola() {
       riba: zbir(r.riba),
       plasman: r.plasman,
       poena: r.poena,
+      kazna: r.kazna || 0,
+      razlogKazne: r.razlogKazne || '',
     }));
     if (!redovi.length) continue;
     const card = el('div', 'card scroll-x');
@@ -698,6 +727,10 @@ function renderKola() {
       crtajTabelu(`grupa-${gr}`, 'kola', KOL_GRUPA, redovi, { pocetni: { key: 'plasman', dir: 1 } }));
     gwrap.appendChild(card);
   }
+
+  $('#round-kazne').innerHTML = (kolo.kazne || []).length
+    ? '* ' + kolo.kazne.map(k => `${k.ime}: ${k.razlog || 'sudijska kazna'}, +${k.plasman} plasman-poena`).join(' · ')
+    : '';
 
   const best = svi.slice().sort(poredak)[0];
   $('#round-best').innerHTML = best ? (
@@ -944,6 +977,12 @@ function renderSve() {
 /* ---------- učitavanje ---------- */
 
 async function ucitaj() {
+  const kazne = await fetch('data/kazne.json', { cache: 'no-cache' })
+    .then(r => r.ok ? r.json() : null)
+    .then(j => (j && j.kazne) || [])
+    .catch(() => []);
+  S.kazne = kazne;
+
   const pokusaji = [];
   for (let i = 1; i <= MAX_KOLA; i++) {
     pokusaji.push(fetch(`data/kolo-${i}.xlsx`, { cache: 'no-cache' })
@@ -957,6 +996,7 @@ async function ucitaj() {
     try {
       const k = parsirajKolo(b, `kolo-${i}.xlsx`);
       if (!k.kolo) k.kolo = i;
+      primijeniKazne(k, S.kazne);
       S.kola.push(k);
     } catch (e) {
       greske.push(`kolo-${i}.xlsx: ${e.message}`);
@@ -993,6 +1033,7 @@ async function primiFajl(f) {
   try {
     const kolo = parsirajKolo(await f.arrayBuffer(), f.name);
     if (!kolo.kolo) throw new Error('U sheetu TABELA nije nađen broj kola (ćelija "Kolo: N").');
+    primijeniKazne(kolo, S.kazne);
     const i = S.kola.findIndex(k => k.kolo === kolo.kolo);
     if (i >= 0) S.kola[i] = kolo; else S.kola.push(kolo);
     S.izabrani = [];
@@ -1055,5 +1096,5 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno };
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne };
 }
