@@ -339,6 +339,19 @@ const mx = matricaDvoboja(osnova, prosjeci, preostalo, osnova[0].kljuc, osnova[1
 assert.strictEqual(mx.length, parovi.length);
 assert.strictEqual(mx[0][mx[0].length - 1], osnova[0].kljuc, 'gornji desni ugao pripada prvom');
 assert.strictEqual(mx[mx.length - 1][0], osnova[1].kljuc, 'donji lijevi ugao pripada drugom');
+// prosjek po kolu ne smije da nosi kazne za propustena kola: sa kaznama bi
+// Sokolovicu ispalo 113 po kolu, a najslabije moguce odigrano kolo je 27
+for (const t of st.perTakmicar) {
+  const pk = t.plasman / t.kolaOdigrao;
+  assert.ok(pk >= min && pk <= max,
+    `${t.ime}: prosjek po kolu ${pk.toFixed(1)} je van moguceg opsega ${min}-${max}`);
+}
+const saKaznama = osnova.find(v => v.ime === 'Edin Sokolović');
+const cist = st.perTakmicar.find(v => v.kljuc === saKaznama.kljuc);
+assert.ok(saKaznama.plasman > cist.plasman, 'kumulativni zbir nosi kazne, cisti ne');
+assert.strictEqual(saKaznama.plasman - cist.plasman, 30 * (sez.kola.length - cist.kolaOdigrao),
+  'razlika mora biti tacno 30 po propustenom kolu');
+
 // licna trka: vrijedi za svakoga, ne samo za vrh tabele
 for (const v of [osnova[0], osnova[Math.floor(osnova.length / 2)], osnova[osnova.length - 1]]) {
   const t = licnaTrka(osnova, prosjeci, preostalo, min, max, v.kljuc);

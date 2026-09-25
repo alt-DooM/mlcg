@@ -1233,7 +1233,10 @@ function osnovaZa(ekipno) {
   return ekipno ? saPromjenom(S.sez.snapshotsEk) : saPromjenom(S.sez.snapshots);
 }
 
-// prosječan zbir sektorskih plasmana po odigranom kolu
+/* Prosječan zbir sektorskih plasmana po ODIGRANOM kolu. Namjerno se ne dijeli
+   kumulativni zbir iz rang liste, jer on nosi i kazne od 30 za propuštena kola:
+   Edinu Sokoloviću bi tako "prosjek" ispao 113 po kolu, a najslabije moguće
+   odigrano kolo je 27. Ovdje se dijeli čist zbir iz kola u kojima je nastupio. */
 function prosjeciPoKolu(ekipno) {
   const izvor = ekipno ? S.stat.perKlub : S.stat.perTakmicar;
   return new Map(izvor.map(v => [v.kljuc, v.kolaOdigrao ? Math.round(v.plasman / v.kolaOdigrao) : 0]));
@@ -1437,7 +1440,11 @@ function renderLicnaTrka(ctx) {
       : (k.mozeMeStici
         ? `može te stići<span class="licna-tiho">ako budeš slabiji</span>`
         : '<span class="licna-ne">ne može te stići</span>');
-    return `<li><span class="licna-mj">${k.mjesto}.</span><span class="licna-ime">${ime}</span>` +
+    const odigrao = (S.stat && !ekipno) ? (S.stat.perTakmicar.find(x => x.kljuc === k.kljuc) || {}).kolaOdigrao : null;
+    const propustio = odigrao != null && odigrao < S.sez.kola.length
+      ? `<span class="licna-tiho">propustio ${S.sez.kola.length - odigrao} kola</span>` : '';
+    return `<li><span class="licna-mj">${k.mjesto}.</span>` +
+      `<span class="licna-ime">${ime}${propustio}</span>` +
       `<span class="licna-sta">${tekst}</span></li>`;
   };
 
