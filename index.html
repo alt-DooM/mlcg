@@ -96,19 +96,35 @@
       <div class="card scroll-x" id="stat-tabela"></div>
     </section>
     <section class="panel" data-panel="prognoza" hidden>
-      <h2 class="panel-title">Šta kome treba za titulu</h2>
+      <h2 class="panel-title">Trka za titulu</h2>
       <p class="panel-lead" id="treba-rezime"></p>
       <div class="prog-kontrole" id="prog-kontrole"></div>
-      <div class="treba-lista" id="treba-lista"></div>
-      <p class="fineprint">Računato pod pretpostavkom da svi ostali odigraju onako kako su
-        prosječno igrali do sada. Ovo je račun, ne prognoza: brojevi su tačni za tu pretpostavku.</p>
 
-      <h3 class="sub-title">Dvoboj: ko je prvak za koji ishod</h3>
-      <p class="panel-lead">Cijela tabla odjednom. Red je mjesto prvog takmičara, kolona mjesto drugog,
-        a boja polja kaže ko je na kraju prvak. Ostali i ovdje igraju svoj prosjek.</p>
-      <div class="dvoboj-izbor" id="dvoboj-izbor"></div>
-      <div class="card scroll-x card-pad" id="dvoboj-matrica"></div>
-      <div class="legend" id="dvoboj-legenda"></div>
+      <div class="prog-dvije">
+        <section>
+          <h3 class="sub-title prva">Šta kome treba</h3>
+          <div class="treba-lista" id="treba-lista"></div>
+          <p class="fineprint">Računato pod pretpostavkom da svi ostali odigraju onako kako su
+            postavljeni klizačima ispod. Ovo je račun, ne prognoza: brojevi su tačni za tu pretpostavku.</p>
+        </section>
+
+        <section>
+          <h3 class="sub-title prva">Dvoboj: ko je prvak za koji ishod</h3>
+          <p class="panel-lead">Red je mjesto prvog takmičara, kolona mjesto drugog, a boja polja
+            kaže ko je na kraju prvak. Treća osa ne bi stala na ekran, pa ostale postavljaš
+            klizačima ispod: pomjeriš nekoga i matrica se odmah prilagodi.</p>
+          <div class="dvoboj-izbor" id="dvoboj-izbor"></div>
+          <div class="card card-pad" id="dvoboj-matrica"></div>
+          <div class="legend" id="dvoboj-legenda"></div>
+        </section>
+      </div>
+
+      <h2 class="panel-title razmak">Tvoja trka</h2>
+      <p class="panel-lead">Za titulu se bore trojica, ali svako ima svoju trku sa onima
+        oko sebe. Izaberi ime i vidi koga još možeš da stigneš, a ko može tebe.</p>
+      <div class="licna-izbor" id="licna-izbor"></div>
+      <div class="kpi-grid" id="licna-sazetak"></div>
+      <div class="licna-komsije" id="licna-komsije"></div>
 
       <h3 class="sub-title">Ručni kalkulator</h3>
       <p class="panel-lead">Ako hoćeš da se poigraš sa više njih odjednom. Klizač je

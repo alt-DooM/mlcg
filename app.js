@@ -723,6 +723,48 @@ function staTreba(osnova, prosjeci, preostalo, min, max) {
   return out;
 }
 
+/* Najslabiji prosjek sa kojim `ja` jos zavrsavam ispred `protivnika`, uz to da
+   protivnik odigra svoju pretpostavku. Vraca null ako ni najbolji ishod ne stize.
+   Isto pitanje kao staTreba, samo sto meta nije prvo mjesto nego jedan covjek. */
+function granicaProtiv(osnova, pretpostavke, preostalo, min, max, ja, protivnik) {
+  const nadji = (sc, k) => sc.find(v => v.kljuc === k);
+  let granica = null;
+  for (let z = min; z <= max; z++) {
+    const sc = scenarij(osnova, new Map([[ja, z]]), preostalo, pretpostavke);
+    const A = nadji(sc, ja), B = nadji(sc, protivnik);
+    if (!A || !B) break;
+    if (A.konacnoMjesto > B.konacnoMjesto) break;
+    granica = z;
+  }
+  return granica;
+}
+
+/* Sve sto jednog takmicara zanima za njegovu licnu trku, bez obzira na titulu. */
+function licnaTrka(osnova, pretpostavke, preostalo, min, max, ja, koliko = 4) {
+  const nadji = (sc, k) => sc.find(v => v.kljuc === k);
+  const ocekivano = scenarij(osnova, new Map(), preostalo, pretpostavke);
+  const sad = osnova.findIndex(v => v.kljuc === ja);
+  const mojeOcekivano = nadji(ocekivano, ja);
+  const najbolje = nadji(scenarij(osnova, new Map([[ja, min]]), preostalo, pretpostavke), ja);
+  const najgore = nadji(scenarij(osnova, new Map([[ja, max]]), preostalo, pretpostavke), ja);
+
+  const komsije = osnova
+    .filter((v, i) => v.kljuc !== ja && Math.abs(i - sad) <= koliko)
+    .map(v => {
+      const granica = granicaProtiv(osnova, pretpostavke, preostalo, min, max, ja, v.kljuc);
+      const obrnuto = granicaProtiv(osnova, pretpostavke, preostalo, min, max, v.kljuc, ja);
+      return { ...v, granica, mozeMeStici: obrnuto !== null };
+    });
+
+  return {
+    sada: osnova[sad],
+    ocekivano: mojeOcekivano,
+    najbolje: najbolje ? najbolje.konacnoMjesto : null,
+    najgore: najgore ? najgore.konacnoMjesto : null,
+    komsije,
+  };
+}
+
 /* Po jedan predstavnik zbira za svako mjesto, da ose matrice ne ponavljaju
    isto mjesto dvaput (zbir 3 i 4 su oba prvo mjesto). */
 function zbiroviPoMjestu(uMjesto, min, max, koliko) {
@@ -780,6 +822,8 @@ const S = {
   kalkEkipno: false,
   prognoza: null,
   dvoboj: null,
+  matricaCtx: null,
+  licni: null,
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -1221,9 +1265,11 @@ function renderKalkulator() {
   const redovi = kandidati.map(v => {
     const pocetna = Math.round(prosjeci.get(v.kljuc) ?? min);
     const ime = ekipno ? kratkiKlub(v.ime) : v.ime;
-    return `<div class="kalk-red" data-kljuc="${v.kljuc}">
+    const naOsi = (S.dvoboj || []).includes(v.kljuc);
+    return `<div class="kalk-red${naOsi ? ' na-osi' : ''}" data-kljuc="${v.kljuc}">
       <div class="kalk-ko"><span class="kalk-ime">${ime}</span>
         <span class="kalk-sad">sada ${v.plasman}</span>
+        ${naOsi ? '<span class="kalk-osa">na osi matrice</span>' : ''}
         ${moze.get(v.kljuc) ? '' : '<span class="kalk-ne">bez šanse za titulu</span>'}</div>
       <div class="kalk-klizac">
         <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Prosječno mjesto kroz preostala kola za ${ime}">
@@ -1308,6 +1354,16 @@ function renderStaTreba() {
   return { osnova, prosjeci, min, max, uMjesto, zivi };
 }
 
+/* Sta je trenutno postavljeno: vrijednost klizaca ako ga ima, inace prosjek. */
+function pretpostavkeSvih(osnova, prosjeci) {
+  const m = new Map(prosjeci);
+  const kalk = document.querySelector('#kalk-tabela');
+  if (kalk) kalk.querySelectorAll('input[type=range]').forEach(el => {
+    m.set(el.dataset.kljuc, Number(el.value));
+  });
+  return m;
+}
+
 function renderMatrica(ctx) {
   const { osnova, prosjeci, min, max, uMjesto } = ctx;
   const ekipno = S.kalkEkipno;
@@ -1323,7 +1379,9 @@ function renderMatrica(ctx) {
     '</select>';
 
   const parovi = zbiroviPoMjestu(uMjesto, min, max, 10);
-  const m = matricaDvoboja(osnova, prosjeci, preostalo, a, b, parovi);
+  // ostali igraju onako kako su postavljeni klizacima, a ne nuzno svoj prosjek
+  const ostali = pretpostavkeSvih(osnova, prosjeci);
+  const m = matricaDvoboja(osnova, ostali, preostalo, a, b, parovi);
   const imena = new Map(osnova.map(v => [v.kljuc, imeOd(v)]));
 
   const glava = parovi.map(([mj]) => `<th>${mj}.</th>`).join('');
@@ -1345,11 +1403,56 @@ function renderMatrica(ctx) {
     `<span><i class="mx-c"></i>prvak je neko treći</span>`;
 }
 
+function renderLicnaTrka(ctx) {
+  const { osnova, prosjeci, min, max, uMjesto } = ctx;
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const imeOd = v => ekipno ? kratkiKlub(v.ime) : v.ime;
+
+  if (!S.licni || !osnova.find(v => v.kljuc === S.licni)) S.licni = osnova[0].kljuc;
+  const pretpostavke = pretpostavkeSvih(osnova, prosjeci);
+  const t = licnaTrka(osnova, pretpostavke, preostalo, min, max, S.licni);
+
+  $('#licna-izbor').innerHTML = `<label>${ekipno ? 'Klub' : 'Takmičar'}: <select id="licni-select">` +
+    osnova.map(v => `<option value="${v.kljuc}"${v.kljuc === S.licni ? ' selected' : ''}>${v.mjesto}. ${imeOd(v)}</option>`).join('') +
+    '</select></label>';
+
+  const kut = (k, v, d) => `<div class="kpi"><div class="kpi-k">${k}</div><div class="kpi-v">${v}</div>` +
+    (d ? `<div class="licna-d">${d}</div>` : '') + '</div>';
+  $('#licna-sazetak').innerHTML =
+    kut('Sada', t.sada.mjesto + '.', t.sada.plasman + ' plasmana') +
+    kut('Ako nastavi ovako', t.ocekivano.konacnoMjesto + '.', 'na kraju sezone') +
+    kut('Najbolje moguće', t.najbolje + '.', 'sve prva mjesta') +
+    kut('Najgore moguće', t.najgore + '.', 'sve posljednja mjesta');
+
+  const ispred = t.komsije.filter(k => k.mjesto < t.sada.mjesto);
+  const iza = t.komsije.filter(k => k.mjesto > t.sada.mjesto);
+
+  const red = (k, gore) => {
+    const ime = imeOd(k);
+    const tekst = gore
+      ? (k.granica === null
+        ? '<span class="licna-ne">van domašaja</span>'
+        : `prestižeš ga sa prosječno <b>${uMjesto(k.granica)}. mjesta</b>`)
+      : (k.mozeMeStici
+        ? `može te stići<span class="licna-tiho">ako budeš slabiji</span>`
+        : '<span class="licna-ne">ne može te stići</span>');
+    return `<li><span class="licna-mj">${k.mjesto}.</span><span class="licna-ime">${ime}</span>` +
+      `<span class="licna-sta">${tekst}</span></li>`;
+  };
+
+  $('#licna-komsije').innerHTML =
+    `<div><h4>Ispred</h4><ul class="licna-lista">${ispred.map(k => red(k, true)).join('') || '<li class="licna-prazno">Niko, na vrhu je.</li>'}</ul></div>` +
+    `<div><h4>Iza</h4><ul class="licna-lista">${iza.map(k => red(k, false)).join('') || '<li class="licna-prazno">Niko, na dnu je.</li>'}</ul></div>`;
+}
+
 function renderPrognoza() {
   renderKontrole();
   const ctx = renderStaTreba();
-  renderMatrica(ctx);
   renderKalkulator();
+  renderMatrica(ctx);
+  renderLicnaTrka(ctx);
+  S.matricaCtx = ctx;
 
   const ekipno = S.kalkEkipno;
   const preostalo = S.preostalo;
@@ -1518,13 +1621,22 @@ if (typeof document !== 'undefined') {
   });
 
   document.addEventListener('input', e => {
-    if (e.target.matches('#kalk-tabela input[type=range]')) osvjeziKalkulator();
+    if (e.target.matches('#kalk-tabela input[type=range]')) {
+      osvjeziKalkulator();
+      if (S.matricaCtx) { renderMatrica(S.matricaCtx); renderLicnaTrka(S.matricaCtx); }
+    }
   });
   document.addEventListener('change', e => {
     const sel = e.target.closest('#dvoboj-izbor select');
-    if (!sel) return;
-    S.dvoboj[Number(sel.dataset.dvoboj)] = sel.value;
-    renderPrognoza();
+    if (sel) {
+      S.dvoboj[Number(sel.dataset.dvoboj)] = sel.value;
+      renderPrognoza();
+      return;
+    }
+    if (e.target.id === 'licni-select') {
+      S.licni = e.target.value;
+      if (S.matricaCtx) renderLicnaTrka(S.matricaCtx);
+    }
   });
 
   document.getElementById('tabs').addEventListener('click', e => {
@@ -1558,6 +1670,6 @@ if (typeof document !== 'undefined') {
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne,
-    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, UKUPNO_KOLA,
+    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, licnaTrka, granicaProtiv, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }

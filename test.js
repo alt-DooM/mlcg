@@ -14,7 +14,7 @@ global.XLSX = require('./vendor/xlsx.full.min.js');
 const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
-        staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto } = require('./app.js');
+        staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -339,6 +339,25 @@ const mx = matricaDvoboja(osnova, prosjeci, preostalo, osnova[0].kljuc, osnova[1
 assert.strictEqual(mx.length, parovi.length);
 assert.strictEqual(mx[0][mx[0].length - 1], osnova[0].kljuc, 'gornji desni ugao pripada prvom');
 assert.strictEqual(mx[mx.length - 1][0], osnova[1].kljuc, 'donji lijevi ugao pripada drugom');
+// licna trka: vrijedi za svakoga, ne samo za vrh tabele
+for (const v of [osnova[0], osnova[Math.floor(osnova.length / 2)], osnova[osnova.length - 1]]) {
+  const t = licnaTrka(osnova, prosjeci, preostalo, min, max, v.kljuc);
+  assert.strictEqual(t.sada.kljuc, v.kljuc);
+  assert.ok(t.najbolje <= t.ocekivano.konacnoMjesto, `${v.ime}: najbolji ishod ne smije biti losiji od ocekivanog`);
+  assert.ok(t.najgore >= t.ocekivano.konacnoMjesto, `${v.ime}: najgori ishod ne smije biti bolji od ocekivanog`);
+  assert.ok(t.komsije.length > 0 && t.komsije.every(k => k.kljuc !== v.kljuc), `${v.ime}: komsije ne ukljucuju njega samog`);
+  // granica protiv komsije mora stvarno da bude granica
+  for (const k of t.komsije.filter(x => x.granica !== null)) {
+    const sc = scenarij(osnova, new Map([[v.kljuc, k.granica]]), preostalo, prosjeci);
+    const ja = sc.find(x => x.kljuc === v.kljuc), on = sc.find(x => x.kljuc === k.kljuc);
+    assert.ok(ja.konacnoMjesto <= on.konacnoMjesto, `${v.ime} protiv ${k.ime}: granica ${k.granica} ga ne drzi ispred`);
+  }
+}
+// vodeceg niko ne moze prestici odozdo ako odigra najbolje
+const vrh = licnaTrka(osnova, prosjeci, preostalo, min, max, osnova[0].kljuc);
+assert.strictEqual(vrh.najbolje, 1, 'vodeci sa najboljim ishodom zavrsava prvi');
+assert.strictEqual(vrh.komsije.filter(k => k.mjesto < vrh.sada.mjesto).length, 0, 'ispred vodeceg nema nikoga');
+
 console.log(`  OK  prognoza: kalkulator tacan, granice tacne, simulacija ponovljiva (${preostalo} preostala kola, ${zivi.length} jos u igri)`);
 
 console.log(`\nSve provjere prošle (${ok} redova protiv Python izlaza, ${poredjeno} protiv dokumenta saveza).`);
