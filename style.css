@@ -287,9 +287,11 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 .kalk-klizac{display:flex;align-items:center;gap:12px}
 .kalk-klizac input[type=range]{flex:1;min-width:0;accent-color:var(--teal);height:28px}
 .kalk-vrijednost{
-  min-width:34px;text-align:right;font:700 18px/1 Archivo,sans-serif;
-  color:var(--teal);font-variant-numeric:tabular-nums;
+  min-width:74px;display:flex;flex-direction:column;gap:2px;text-align:right;
+  font-variant-numeric:tabular-nums;
 }
+.kalk-mj{font:700 19px/1 Archivo,sans-serif;color:var(--teal)}
+.kalk-zbir{font:500 12px/1 Archivo,sans-serif;color:var(--muted)}
 .kalk-krajnje{display:flex;flex-direction:column;gap:2px;text-align:right}
 .kalk-mjesto{font:700 clamp(19px,3.4vw,23px)/1 Archivo,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
 .kalk-ukupno{font:500 14px/1.2 Archivo,sans-serif;color:var(--muted);font-variant-numeric:tabular-nums}

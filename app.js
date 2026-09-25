@@ -661,6 +661,27 @@ function rasponKola(sez, ekipno) {
   return { min: Math.min(...svi), max: Math.max(...svi) };
 }
 
+/* Klizač radi sa zbirom sektorskih plasmana, a ribolovac razmišlja u mjestima.
+   Ovo je prevod, iz stvarno odigranih kola: koliko je rezultata bilo bolje od
+   datog zbira, podijeljeno brojem kola, plus jedan. */
+function prevodUMjesto(sez, ekipno) {
+  const svi = [];
+  for (const kolo of sez.kola) {
+    const v = ekipno
+      ? [...rezultatiEkipno(kolo).values()].map(x => x.plasman)
+      : [...kolo.rezultati.values()].map(x => x.plasman);
+    svi.push(...v);
+  }
+  svi.sort((a, b) => a - b);
+  const brojKola = Math.max(1, sez.kola.length);
+  const ucesnika = Math.max(1, Math.round(svi.length / brojKola));
+  return zbir => {
+    let bolji = 0;
+    while (bolji < svi.length && svi[bolji] < zbir) bolji++;
+    return Math.min(ucesnika, Math.max(1, Math.round(1 + bolji / brojKola)));
+  };
+}
+
 /* Konačna tabela pod pretpostavkom da svako u SVAKOM preostalom kolu ostvari
    zbir `pretpostavke.get(kljuc)`. Ko nema pretpostavku, zadržava svoj prosjek. */
 function scenarij(osnova, pretpostavke, preostalo, prosjeci) {
@@ -1134,7 +1155,7 @@ function osnovaZa(ekipno) {
 // prosječan zbir sektorskih plasmana po odigranom kolu
 function prosjeciPoKolu(ekipno) {
   const izvor = ekipno ? S.stat.perKlub : S.stat.perTakmicar;
-  return new Map(izvor.map(v => [v.kljuc, v.kolaOdigrao ? v.plasman / v.kolaOdigrao : 0]));
+  return new Map(izvor.map(v => [v.kljuc, v.kolaOdigrao ? Math.round(v.plasman / v.kolaOdigrao) : 0]));
 }
 
 function renderKontrole() {
@@ -1168,17 +1189,19 @@ function renderKalkulator() {
         <span class="kalk-sad">sada ${v.plasman}</span>
         ${moze.get(v.kljuc) ? '' : '<span class="kalk-ne">bez šanse za titulu</span>'}</div>
       <div class="kalk-klizac">
-        <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Pretpostavljeni zbir po kolu za ${ime}">
-        <output class="kalk-vrijednost">${pocetna}</output>
+        <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Pretpostavljeni plasman po kolu za ${ime}">
+        <output class="kalk-vrijednost"><b class="kalk-mj">-</b><span class="kalk-zbir">-</span></output>
       </div>
       <div class="kalk-krajnje"><span class="kalk-mjesto">-</span><span class="kalk-ukupno">-</span></div>
     </div>`;
   }).join('');
 
+  const uMjesto = prevodUMjesto(S.sez, ekipno);
   $('#kalk-tabela').innerHTML =
     `<div class="kalk-zaglavlje"><span>${ekipno ? 'Klub' : 'Takmičar'}</span>` +
-    `<span>Pretpostavljeni zbir u svakom preostalom kolu (${min} najbolje, ${max} najgore)</span>` +
-    `<span>Poslije ${preostalo} ${preostalo === 1 ? 'kola' : 'kola'}</span></div>${redovi}`;
+    `<span>Koje mjesto zauzima u svakom od preostalih ${preostalo} kola` +
+    ` (lijevo ${uMjesto(min)}, desno ${uMjesto(max)}.)</span>` +
+    `<span>Kraj sezone</span></div>${redovi}`;
 
   osvjeziKalkulator();
 }
@@ -1189,6 +1212,7 @@ function osvjeziKalkulator() {
   const preostalo = S.preostalo;
   const osnova = osnovaZa(ekipno);
   const prosjeci = prosjeciPoKolu(ekipno);
+  const uMjesto = prevodUMjesto(S.sez, ekipno);
 
   const pretpostavke = new Map();
   $('#kalk-tabela').querySelectorAll('input[type=range]').forEach(el => {
@@ -1202,7 +1226,8 @@ function osvjeziKalkulator() {
   $('#kalk-tabela').querySelectorAll('.kalk-red').forEach(red => {
     const v = poKljucu.get(red.dataset.kljuc);
     if (!v) return;
-    red.querySelector('.kalk-vrijednost').textContent = v.poKolu;
+    red.querySelector('.kalk-mj').textContent = uMjesto(v.poKolu) + '.';
+    red.querySelector('.kalk-zbir').textContent = 'zbir ' + v.poKolu;
     red.querySelector('.kalk-mjesto').textContent = v.konacnoMjesto + '.';
     red.querySelector('.kalk-ukupno').textContent = v.konacni;
     red.classList.toggle('je-prvak', v.kljuc === prvak.kljuc);
@@ -1418,6 +1443,6 @@ if (typeof document !== 'undefined') {
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne,
-    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, UKUPNO_KOLA,
+    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }
