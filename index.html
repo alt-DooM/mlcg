@@ -96,12 +96,24 @@
       <div class="card scroll-x" id="stat-tabela"></div>
     </section>
     <section class="panel" data-panel="prognoza" hidden>
-      <h2 class="panel-title">Kalkulator titule</h2>
-      <p class="panel-lead"><b>Pitanje na koje odgovara:</b> šta se mora desiti da neko bude prvak?
-        Povuci klizač za takmičara i reci koje mjesto zauzima u svakom preostalom kolu. Desno se
-        odmah ispisuje gdje tako završava sezonu. Ovo nije pogađanje nego račun: ako uneseš tačnu
-        pretpostavku, dobijaš tačan ishod. Koga ne diraš, nastavlja svojim dosadašnjim prosjekom.</p>
+      <h2 class="panel-title">Šta kome treba za titulu</h2>
+      <p class="panel-lead" id="treba-rezime"></p>
       <div class="prog-kontrole" id="prog-kontrole"></div>
+      <div class="treba-lista" id="treba-lista"></div>
+      <p class="fineprint">Računato pod pretpostavkom da svi ostali odigraju onako kako su
+        prosječno igrali do sada. Ovo je račun, ne prognoza: brojevi su tačni za tu pretpostavku.</p>
+
+      <h3 class="sub-title">Dvoboj: ko je prvak za koji ishod</h3>
+      <p class="panel-lead">Cijela tabla odjednom. Red je mjesto prvog takmičara, kolona mjesto drugog,
+        a boja polja kaže ko je na kraju prvak. Ostali i ovdje igraju svoj prosjek.</p>
+      <div class="dvoboj-izbor" id="dvoboj-izbor"></div>
+      <div class="card scroll-x card-pad" id="dvoboj-matrica"></div>
+      <div class="legend" id="dvoboj-legenda"></div>
+
+      <h3 class="sub-title">Ručni kalkulator</h3>
+      <p class="panel-lead">Ako hoćeš da se poigraš sa više njih odjednom. Klizač je
+        <b>prosječno mjesto</b> kroz preostala kola, pa je drugo mjesto isto što i prvo pa treće.
+        Koga ne diraš, nastavlja svojim prosjekom.</p>
       <div class="kalk-ishod" id="kalk-ishod"></div>
       <div class="card" id="kalk-tabela"></div>
 

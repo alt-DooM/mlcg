@@ -13,7 +13,8 @@ const assert = require('assert');
 global.XLSX = require('./vendor/xlsx.full.min.js');
 const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
-        prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA } = require('./app.js');
+        prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
+        staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -308,6 +309,36 @@ for (const [k, v] of p1.titula) if (moze.get(k) === false) assert.strictEqual(v,
 // bez preostalih kola nista ne puca
 const p0 = prognoza(sez, 0, { broj: 200 });
 assert.ok(p0.sljedece.size > 0 && [...p0.titula.values()].every(v => v === 0));
-console.log(`  OK  prognoza: kalkulator tacan, simulacija ponovljiva (${preostalo} preostala kola)`);
+// "sta kome treba": granica mora stvarno da bude granica
+const uMjesto = prevodUMjesto(sez, false);
+const treba = staTreba(osnova, prosjeci, preostalo, min, max);
+const zivi = osnova.filter(v => treba.get(v.kljuc).moguce);
+assert.ok(zivi.length >= 1 && zivi.length < osnova.length, 'neko moze do titule, ali ne svi');
+assert.strictEqual(zivi[0].kljuc, osnova[0].kljuc, 'vodeci je uvijek medju zivima');
+for (const v of zivi) {
+  const g = treba.get(v.kljuc).granica;
+  const taman = scenarij(osnova, new Map([[v.kljuc, g]]), preostalo, prosjeci);
+  assert.strictEqual(taman[0].kljuc, v.kljuc, `${v.ime}: sa granicom ${g} mora biti prvak`);
+  if (g < max) {
+    const malo_gore = scenarij(osnova, new Map([[v.kljuc, g + 1]]), preostalo, prosjeci);
+    assert.notStrictEqual(malo_gore[0].kljuc, v.kljuc, `${v.ime}: jedan slabiji od granice vise nije prvak`);
+  }
+}
+for (const v of osnova) if (!treba.get(v.kljuc).moguce) {
+  const najbolje = scenarij(osnova, new Map([[v.kljuc, min]]), preostalo, prosjeci);
+  assert.notStrictEqual(najbolje[0].kljuc, v.kljuc, `${v.ime}: oznacen kao otpisan, a najbolji ishod ga vodi do titule`);
+}
+
+// ose matrice ne smiju dvaput da ponove isto mjesto
+const parovi = zbiroviPoMjestu(uMjesto, min, max, 10);
+assert.strictEqual(new Set(parovi.map(p => p[0])).size, parovi.length, 'svako mjesto se pojavljuje jednom');
+assert.deepStrictEqual(parovi.map(p => p[0]), parovi.map(p => p[0]).slice().sort((a, b) => a - b), 'ose su rastuce');
+
+// matrica: najbolji ishod za jednog i najgori za drugog mora dati prvog
+const mx = matricaDvoboja(osnova, prosjeci, preostalo, osnova[0].kljuc, osnova[1].kljuc, parovi);
+assert.strictEqual(mx.length, parovi.length);
+assert.strictEqual(mx[0][mx[0].length - 1], osnova[0].kljuc, 'gornji desni ugao pripada prvom');
+assert.strictEqual(mx[mx.length - 1][0], osnova[1].kljuc, 'donji lijevi ugao pripada drugom');
+console.log(`  OK  prognoza: kalkulator tacan, granice tacne, simulacija ponovljiva (${preostalo} preostala kola, ${zivi.length} jos u igri)`);
 
 console.log(`\nSve provjere prošle (${ok} redova protiv Python izlaza, ${poredjeno} protiv dokumenta saveza).`);

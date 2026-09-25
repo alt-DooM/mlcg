@@ -706,6 +706,42 @@ function mozeDoTitule(osnova, preostalo, min, max) {
   }));
 }
 
+/* Najslabiji prosjek koji jos donosi titulu, uz pretpostavku da ostali odigraju
+   svoj dosadasnji prosjek. Ovo je obrnuto pitanje od klizaca: ne "sta ako", nego
+   "sta mu treba". Vraca {kljuc: {granica, moguce}} gdje je granica zbir po kolu. */
+function staTreba(osnova, prosjeci, preostalo, min, max) {
+  const out = new Map();
+  for (const v of osnova) {
+    let granica = null;
+    for (let z = min; z <= max; z++) {
+      const sc = scenarij(osnova, new Map([[v.kljuc, z]]), preostalo, prosjeci);
+      if (sc[0].kljuc !== v.kljuc) break;
+      granica = z;
+    }
+    out.set(v.kljuc, { granica, moguce: granica !== null });
+  }
+  return out;
+}
+
+/* Po jedan predstavnik zbira za svako mjesto, da ose matrice ne ponavljaju
+   isto mjesto dvaput (zbir 3 i 4 su oba prvo mjesto). */
+function zbiroviPoMjestu(uMjesto, min, max, koliko) {
+  const vidjeno = new Map();
+  for (let z = min; z <= max; z++) {
+    const m = uMjesto(z);
+    if (!vidjeno.has(m)) vidjeno.set(m, z);
+  }
+  return [...vidjeno.entries()].sort((a, b) => a[0] - b[0]).slice(0, koliko);
+}
+
+/* Ko je prvak za svaku kombinaciju plasmana dvojice kandidata. */
+function matricaDvoboja(osnova, prosjeci, preostalo, a, b, parovi) {
+  return parovi.map(([, za]) => parovi.map(([, zb]) => {
+    const sc = scenarij(osnova, new Map([[a, za], [b, zb]]), preostalo, prosjeci);
+    return sc[0].kljuc;
+  }));
+}
+
 /* ---------- render ---------- */
 
 const $ = sel => document.querySelector(sel);
@@ -743,6 +779,7 @@ const S = {
   preostalo: 1,
   kalkEkipno: false,
   prognoza: null,
+  dvoboj: null,
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -1189,7 +1226,7 @@ function renderKalkulator() {
         <span class="kalk-sad">sada ${v.plasman}</span>
         ${moze.get(v.kljuc) ? '' : '<span class="kalk-ne">bez šanse za titulu</span>'}</div>
       <div class="kalk-klizac">
-        <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Pretpostavljeni plasman po kolu za ${ime}">
+        <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Prosječno mjesto kroz preostala kola za ${ime}">
         <output class="kalk-vrijednost"><b class="kalk-mj">-</b><span class="kalk-zbir">-</span></output>
       </div>
       <div class="kalk-krajnje"><span class="kalk-mjesto">-</span><span class="kalk-ukupno">-</span></div>
@@ -1199,7 +1236,7 @@ function renderKalkulator() {
   const uMjesto = prevodUMjesto(S.sez, ekipno);
   $('#kalk-tabela').innerHTML =
     `<div class="kalk-zaglavlje"><span>${ekipno ? 'Klub' : 'Takmičar'}</span>` +
-    `<span>Koje mjesto zauzima u svakom od preostalih ${preostalo} kola` +
+    `<span>Prosječno mjesto kroz preostala ${preostalo} kola` +
     ` (lijevo ${uMjesto(min)}, desno ${uMjesto(max)}.)</span>` +
     `<span>Kraj sezone</span></div>${redovi}`;
 
@@ -1238,8 +1275,80 @@ function osvjeziKalkulator() {
     `<span class="kalk-detalj">sa ${prvak.konacni} sektorskih plasmana</span>`;
 }
 
+function renderStaTreba() {
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const osnova = osnovaZa(ekipno);
+  const prosjeci = prosjeciPoKolu(ekipno);
+  const { min, max } = rasponKola(S.sez, ekipno);
+  const uMjesto = prevodUMjesto(S.sez, ekipno);
+  const treba = staTreba(osnova, prosjeci, preostalo, min, max);
+
+  const zivi = osnova.filter(v => treba.get(v.kljuc).moguce);
+  const ispali = osnova.length - zivi.length;
+  const rijec = ekipno ? 'klub' : 'takmičar';
+
+  const kartice = zivi.map((v, i) => {
+    const g = treba.get(v.kljuc).granica;
+    const ime = ekipno ? kratkiKlub(v.ime) : v.ime;
+    const koliko = preostalo === 1 ? 'u posljednjem kolu' : `u prosjeku kroz preostala ${preostalo} kola`;
+    return `<div class="treba-karta${i === 0 ? ' vodi' : ''}">
+      <div class="treba-mj">${v.mjesto}.</div>
+      <div class="treba-ko"><b>${ime}</b><span>sada ${v.plasman} sektorskih plasmana</span></div>
+      <div class="treba-sta"><b>${uMjesto(g)}. mjesto</b><span>${koliko}</span></div>
+    </div>`;
+  }).join('');
+
+  $('#treba-lista').innerHTML = kartice || `<p class="fineprint">Nema preostalih kola.</p>`;
+  $('#treba-rezime').textContent = zivi.length === 1
+    ? `Titula je riješena, ${zivi.length ? (ekipno ? kratkiKlub(zivi[0].ime) : zivi[0].ime) : ''} je više niko ne može stići.`
+    : `Titulu još može ${zivi.length} ${zivi.length === 1 ? rijec + 'a' : (rijec === 'klub' ? 'kluba' : 'takmičara')}.` +
+      (ispali ? ` Ostalima ni najbolji mogući rezultat više nije dovoljan.` : '');
+
+  return { osnova, prosjeci, min, max, uMjesto, zivi };
+}
+
+function renderMatrica(ctx) {
+  const { osnova, prosjeci, min, max, uMjesto } = ctx;
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const imeOd = v => ekipno ? kratkiKlub(v.ime) : v.ime;
+
+  if (!S.dvoboj || !osnova.find(v => v.kljuc === S.dvoboj[0]) || !osnova.find(v => v.kljuc === S.dvoboj[1])) {
+    S.dvoboj = [osnova[0].kljuc, (osnova[1] || osnova[0]).kljuc];
+  }
+  const [a, b] = S.dvoboj;
+  const izbor = (izabran, koji) => `<select data-dvoboj="${koji}">` +
+    osnova.slice(0, 12).map(v => `<option value="${v.kljuc}"${v.kljuc === izabran ? ' selected' : ''}>${imeOd(v)}</option>`).join('') +
+    '</select>';
+
+  const parovi = zbiroviPoMjestu(uMjesto, min, max, 10);
+  const m = matricaDvoboja(osnova, prosjeci, preostalo, a, b, parovi);
+  const imena = new Map(osnova.map(v => [v.kljuc, imeOd(v)]));
+
+  const glava = parovi.map(([mj]) => `<th>${mj}.</th>`).join('');
+  const redovi = parovi.map(([mj], i) => {
+    const celije = m[i].map(k => {
+      const tip = k === a ? 'a' : k === b ? 'b' : 'c';
+      return `<td class="mx mx-${tip}" title="${imena.get(k) || ''}"></td>`;
+    }).join('');
+    return `<tr><th>${mj}.</th>${celije}</tr>`;
+  }).join('');
+
+  $('#dvoboj-izbor').innerHTML =
+    `<label>Redovi: ${izbor(a, 0)}</label><label>Kolone: ${izbor(b, 1)}</label>`;
+  $('#dvoboj-matrica').innerHTML =
+    `<table class="mx-tabela"><thead><tr><th class="mx-ugao">mj.</th>${glava}</tr></thead><tbody>${redovi}</tbody></table>`;
+  $('#dvoboj-legenda').innerHTML =
+    `<span><i class="mx-a"></i>prvak je ${imena.get(a)}</span>` +
+    `<span><i class="mx-b"></i>prvak je ${imena.get(b)}</span>` +
+    `<span><i class="mx-c"></i>prvak je neko treći</span>`;
+}
+
 function renderPrognoza() {
   renderKontrole();
+  const ctx = renderStaTreba();
+  renderMatrica(ctx);
   renderKalkulator();
 
   const ekipno = S.kalkEkipno;
@@ -1411,6 +1520,12 @@ if (typeof document !== 'undefined') {
   document.addEventListener('input', e => {
     if (e.target.matches('#kalk-tabela input[type=range]')) osvjeziKalkulator();
   });
+  document.addEventListener('change', e => {
+    const sel = e.target.closest('#dvoboj-izbor select');
+    if (!sel) return;
+    S.dvoboj[Number(sel.dataset.dvoboj)] = sel.value;
+    renderPrognoza();
+  });
 
   document.getElementById('tabs').addEventListener('click', e => {
     const b = e.target.closest('.tab');
@@ -1443,6 +1558,6 @@ if (typeof document !== 'undefined') {
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne,
-    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, UKUPNO_KOLA,
+    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }
