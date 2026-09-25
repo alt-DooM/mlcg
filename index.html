@@ -24,6 +24,7 @@
     <button type="button" class="tab" data-tab="ekipno">Ekipno</button>
     <button type="button" class="tab" data-tab="kola">Kola</button>
     <button type="button" class="tab" data-tab="stat">Statistika</button>
+    <button type="button" class="tab" data-tab="prognoza">Prognoza</button>
   </nav>
 
   <main class="content">
@@ -93,6 +94,35 @@
       <h3 class="sub-title">Detaljno po takmičaru</h3>
       <p class="panel-lead">Kolone <b>Najbolje u kolu</b> i <b>Najgore u kolu</b> su plasmani unutar pojedinačnog kola, a <b>Mj.</b> je mjesto na ukupnoj rang listi. Zato neko može biti 6. na tabeli a da mu najbolji plasman u kolu bude 7: ukupan poredak se računa po zbiru sektorskih plasmana iz svih kola, pa ujednačen nastup kroz sezonu pobjeđuje jedno dobro kolo i dva slaba.</p>
       <div class="card scroll-x" id="stat-tabela"></div>
+    </section>
+    <section class="panel" data-panel="prognoza" hidden>
+      <h2 class="panel-title">Kalkulator titule</h2>
+      <p class="panel-lead">Ovo nije pogađanje nego račun. Povuci klizač i odmah vidiš ko je prvak
+        ako se sezona završi tako. Klizač je zbir sektorskih plasmana u jednom kolu: lijevo je
+        najbolje odigrano kolo, desno najslabije. Ko se ne pomjera, zadržava svoj dosadašnji prosjek.</p>
+      <div class="prog-kontrole" id="prog-kontrole"></div>
+      <div class="kalk-ishod" id="kalk-ishod"></div>
+      <div class="card" id="kalk-tabela"></div>
+
+      <h3 class="sub-title">Šta računar procjenjuje</h3>
+      <p class="panel-lead" id="prog-uvod"></p>
+      <div class="card scroll-x" id="prog-tabela"></div>
+
+      <div class="card card-pad postenje">
+        <div class="postenje-k">Koliko ovome vjerovati</div>
+        <p>Provjereno unazad, na kolima koja su već odigrana, tako što model vidi
+          samo ranija kola pa pogađa sljedeće:</p>
+        <ul>
+          <li>Favorit modela je dobio kolo <b>1 od 3 puta</b>. Pobjednik pojedinačnog
+            kola je u velikoj mjeri stvar dana i rijeke.</li>
+          <li>Za pogađanje ko će biti u <b>prva tri</b> model je upola tačniji od
+            nasumičnog pogađanja (greška 0,088 naspram 0,180).</li>
+          <li>Između dva kola takmičari u prosjeku promijene <b>6 do 7 mjesta</b>,
+            a zabilježen je i skok od 20 mjesta.</li>
+        </ul>
+        <p>Drugim riječima: šanse za titulu su upotrebljive jer se računaju na dva
+          cijela kola, a pobjednika jednog kola uzmi kao zanimljivost, ne kao najavu.</p>
+      </div>
     </section>
   </main>
 

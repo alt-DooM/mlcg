@@ -254,3 +254,54 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 .bar-val{font:700 16px/1 Archivo,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;text-align:right;min-width:56px}
 
 .scroll-x{overflow-x:auto}
+
+/* ---------- prognoza ---------- */
+.prog-kontrole{display:flex;gap:26px;flex-wrap:wrap;margin:0 0 20px}
+.prog-grupa{display:flex;flex-direction:column;gap:8px}
+.prog-lbl{font:600 12px/1.2 Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.prog-dugmad{display:flex;gap:8px;flex-wrap:wrap}
+.prog-dugmad .round-btn{min-height:48px;padding:12px 20px;font-size:17px}
+
+.kalk-ishod{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 16px;
+  padding:18px 22px;border-radius:14px;background:var(--teal);color:#fff;
+}
+.kalk-ishod .kalk-kruna{font:600 12px/1.2 Archivo,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#9fc3c1}
+.kalk-ishod b{font:600 clamp(20px,3.6vw,27px)/1.2 Bitter,Georgia,serif}
+.kalk-ishod .kalk-detalj{font:500 16px/1.3 Archivo,sans-serif;color:#dce8e7}
+
+.kalk-zaglavlje,.kalk-red{
+  display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(200px,2fr) minmax(110px,.7fr);
+  gap:16px;align-items:center;padding:12px 18px;
+}
+.kalk-zaglavlje{
+  background:var(--head);border-bottom:1px solid var(--line);
+  font:600 11px/1.3 Archivo,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+}
+.kalk-red{border-top:1px solid var(--line-soft)}
+.kalk-red.je-prvak{background:#f7e9c4}
+.kalk-ko{display:flex;flex-direction:column;gap:3px;min-width:0}
+.kalk-ime{font:600 clamp(16px,3vw,19px)/1.25 Archivo,sans-serif;color:var(--ink);overflow-wrap:anywhere}
+.kalk-sad{font:500 14px/1.2 Archivo,sans-serif;color:var(--muted)}
+.kalk-ne{font:600 12px/1.2 Archivo,sans-serif;color:var(--down)}
+.kalk-klizac{display:flex;align-items:center;gap:12px}
+.kalk-klizac input[type=range]{flex:1;min-width:0;accent-color:var(--teal);height:28px}
+.kalk-vrijednost{
+  min-width:34px;text-align:right;font:700 18px/1 Archivo,sans-serif;
+  color:var(--teal);font-variant-numeric:tabular-nums;
+}
+.kalk-krajnje{display:flex;flex-direction:column;gap:2px;text-align:right}
+.kalk-mjesto{font:700 clamp(19px,3.4vw,23px)/1 Archivo,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
+.kalk-ukupno{font:500 14px/1.2 Archivo,sans-serif;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.postenje{margin:20px 0 0}
+.postenje-k{font:600 12px/1.2 Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+.postenje p,.postenje li{font:500 clamp(15px,2.8vw,17px)/1.55 Archivo,sans-serif;color:var(--ink-2);margin:0 0 10px}
+.postenje ul{margin:0 0 12px;padding-left:22px}
+
+@media (max-width:760px){
+  .kalk-zaglavlje{display:none}
+  .kalk-red{grid-template-columns:1fr auto;gap:8px 14px;padding:14px}
+  .kalk-klizac{grid-column:1/-1;order:3}
+  .kalk-krajnje{order:2}
+}

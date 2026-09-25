@@ -28,6 +28,8 @@ const KLUB_ALIASI = {
 const RIMSKI = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 const BOJE = ['#0f4c53', '#c8712a', '#2f6b45', '#7a5aa8', '#a83e4c', '#3b6b8c'];
 const MAX_SERIJA = 5;              // koliko takmičara može istovremeno na grafikon
+const UKUPNO_KOLA = 6;             // koliko kola ima sezona; mijenja se ovdje
+const SIMULACIJA = { broj: 10000, ublazavanje: 6, sjeme: 20260914 };
 
 /* ---------- tekst ---------- */
 
@@ -518,6 +520,171 @@ function statistika(sez) {
   return { ukupno, perTakmicar, perKlub, rekordi: { najSesija, najPoenaSesija, najDuza, najRiba, konstantan, skok } };
 }
 
+/* ---------- prognoza: kalkulator titule i vjerovatnoće ----------
+
+   Kalkulator je običan račun, ne pogađanje: uneseš pretpostavku i dobiješ
+   tačan ishod. Vjerovatnoće su simulacija i mogu da promaše, pa stranica
+   pokazuje i koliko su promašivale na odigranim kolima.                     */
+
+// Isti niz slučajnih brojeva pri svakom otvaranju, da se procenti ne mijenjaju
+// sami od sebe kad neko osvježi stranicu.
+function mulberry32(a) {
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Svi sesijski plasmani koje je takmičar do sada ostvario: {kljuc: [1,9,2,...]}
+function sesijskaIstorija(kola) {
+  const h = new Map();
+  for (const kolo of kola) {
+    for (const [k, r] of kolo.rezultati) {
+      if (!h.has(k)) h.set(k, []);
+      for (const s of r.sesije) h.get(k).push(s.plasman);
+    }
+  }
+  return h;
+}
+
+/* Jedna simulirana sesija. Sa malo odigranih kola je istorija preuska, pa bi
+   model bio pretjerano siguran u sebe: poslije I kola je davao favoritu 72%
+   a stvarnom pobjedniku 0,0%. Zato se uz stvarnu istoriju miješa i UBLAZAVANJE
+   nasumičnih sesija. Provjereno na odigranim kolima: greška padne sa 0,100 na
+   0,088 (nasumično pogađanje je 0,180). */
+function izvuciSesiju(hist, r, ublazavanje, brojUGrupi) {
+  const w = hist.length / (hist.length + ublazavanje);
+  return (hist.length && r() < w)
+    ? hist[Math.floor(r() * hist.length)]
+    : 1 + Math.floor(r() * brojUGrupi);
+}
+
+/* Vjerovatnoće za sljedeće kolo i za titulu poslije svih preostalih kola.
+   Vraća {sljedece, titula, ekipnaTitula} kao mape kljuc -> udio 0..1. */
+function prognoza(sez, preostalo, opcije = {}) {
+  const broj = opcije.broj || SIMULACIJA.broj;
+  const ubl = opcije.ublazavanje ?? SIMULACIJA.ublazavanje;
+  const r = mulberry32(opcije.sjeme ?? SIMULACIJA.sjeme);
+
+  const kola = sez.kola;
+  const zadnje = kola[kola.length - 1];
+  if (!zadnje) return { sljedece: new Map(), titula: new Map(), ekipnaTitula: new Map(), broj };
+
+  const hist = sesijskaIstorija(kola);
+  const uGrupi = Math.max(3, Math.round(zadnje.rezultati.size / 3));
+
+  // ko nastupa: svi iz posljednjeg kola
+  const ucesnici = [...zadnje.rezultati.keys()];
+  const trenutno = new Map(sez.snapshots[sez.snapshots.length - 1].map(v => [v.kljuc, v]));
+  const klubOd = new Map([...zadnje.rezultati].map(([k, v]) => [k, kljuc(v.klub || '')]));
+  const klubovi = [...new Set([...klubOd.values()].filter(Boolean))];
+
+  const pobjeda = new Map(ucesnici.map(k => [k, 0]));
+  const top3 = new Map(ucesnici.map(k => [k, 0]));
+  const titula = new Map(ucesnici.map(k => [k, 0]));
+  const ekipna = new Map(klubovi.map(k => [k, 0]));
+  const ekPobjeda = new Map(klubovi.map(k => [k, 0]));
+  const ekTop3 = new Map(klubovi.map(k => [k, 0]));
+
+  const ukupno = new Map();
+  for (let n = 0; n < broj; n++) {
+    // startna pozicija: trenutni zbir; ko nije u tabeli krece od svog kola
+    for (const k of ucesnici) ukupno.set(k, trenutno.get(k) ? trenutno.get(k).plasman : 0);
+
+    for (let kolo = 0; kolo < Math.max(1, preostalo); kolo++) {
+      const rez = ucesnici.map(k => {
+        const h = hist.get(k) || [];
+        let z = 0;
+        for (let s = 0; s < 3; s++) z += izvuciSesiju(h, r, ubl, uGrupi);
+        return { k, z: z + r() * 0.001 };   // sitan šum razbija izjednačenja
+      });
+      if (kolo === 0) {
+        const poredani = rez.slice().sort((a, b) => a.z - b.z);
+        pobjeda.set(poredani[0].k, pobjeda.get(poredani[0].k) + 1);
+        for (const x of poredani.slice(0, 3)) top3.set(x.k, top3.get(x.k) + 1);
+
+        const poKlubu = new Map(klubovi.map(k => [k, 0]));
+        for (const x of rez) {
+          const kk = klubOd.get(x.k);
+          if (kk && poKlubu.has(kk)) poKlubu.set(kk, poKlubu.get(kk) + x.z);
+        }
+        const klubRang = [...poKlubu.entries()].sort((a, b) => a[1] - b[1]);
+        if (klubRang.length) {
+          ekPobjeda.set(klubRang[0][0], ekPobjeda.get(klubRang[0][0]) + 1);
+          for (const [kk] of klubRang.slice(0, 3)) ekTop3.set(kk, ekTop3.get(kk) + 1);
+        }
+      }
+      if (kolo < preostalo) for (const x of rez) ukupno.set(x.k, ukupno.get(x.k) + x.z);
+    }
+
+    if (preostalo > 0) {
+      let naj = null;
+      for (const k of ucesnici) if (naj === null || ukupno.get(k) < ukupno.get(naj)) naj = k;
+      if (naj) titula.set(naj, titula.get(naj) + 1);
+
+      // ekipno: zbir njegova tri takmičara u istom scenariju
+      const poKlubu = new Map(klubovi.map(k => [k, 0]));
+      for (const k of ucesnici) {
+        const kk = klubOd.get(k);
+        if (kk && poKlubu.has(kk)) poKlubu.set(kk, poKlubu.get(kk) + ukupno.get(k));
+      }
+      let najK = null;
+      for (const kk of klubovi) if (najK === null || poKlubu.get(kk) < poKlubu.get(najK)) najK = kk;
+      if (najK) ekipna.set(najK, ekipna.get(najK) + 1);
+    }
+  }
+
+  const udio = m => new Map([...m].map(([k, v]) => [k, v / broj]));
+  return {
+    broj,
+    sljedece: new Map(ucesnici.map(k => [k, { pobjeda: pobjeda.get(k) / broj, top3: top3.get(k) / broj }])),
+    ekipnoSljedece: new Map(klubovi.map(k => [k, { pobjeda: ekPobjeda.get(k) / broj, top3: ekTop3.get(k) / broj }])),
+    titula: udio(titula),
+    ekipnaTitula: udio(ekipna),
+  };
+}
+
+/* ---------- kalkulator ---------- */
+
+// Raspon zbira sektorskih plasmana u jednom kolu, iz odigranih kola.
+function rasponKola(sez, ekipno) {
+  const svi = [];
+  for (const kolo of sez.kola) {
+    const v = ekipno
+      ? [...rezultatiEkipno(kolo).values()].map(x => x.plasman)
+      : [...kolo.rezultati.values()].map(x => x.plasman);
+    svi.push(...v);
+  }
+  if (!svi.length) return { min: 3, max: 27 };
+  return { min: Math.min(...svi), max: Math.max(...svi) };
+}
+
+/* Konačna tabela pod pretpostavkom da svako u SVAKOM preostalom kolu ostvari
+   zbir `pretpostavke.get(kljuc)`. Ko nema pretpostavku, zadržava svoj prosjek. */
+function scenarij(osnova, pretpostavke, preostalo, prosjeci) {
+  return osnova.map(v => {
+    const po = pretpostavke.has(v.kljuc) ? pretpostavke.get(v.kljuc) : (prosjeci.get(v.kljuc) ?? 0);
+    return { ...v, poKolu: po, konacni: v.plasman + po * preostalo };
+  }).sort((a, b) => (a.konacni - b.konacni) || (b.poena - a.poena))
+    .map((v, i) => ({ ...v, konacnoMjesto: i + 1 }));
+}
+
+/* Može li još do titule, u najboljem slučaju za njega i najgorem za ostale.
+   Granice su labave (ne uzimaju u obzir da unutar grupe samo jedan može biti
+   prvi), pa je ovo "matematički moguće", ne i "vjerovatno". */
+function mozeDoTitule(osnova, preostalo, min, max) {
+  const najbolji = Math.min(...osnova.map(v => v.plasman));
+  return new Map(osnova.map(v => {
+    const mojeNajbolje = v.plasman + min * preostalo;
+    const tudjeNajgore = (v.plasman === najbolji
+      ? Math.min(...osnova.filter(x => x.kljuc !== v.kljuc).map(x => x.plasman))
+      : najbolji) + max * preostalo;
+    return [v.kljuc, mojeNajbolje <= tudjeNajgore];
+  }));
+}
+
 /* ---------- render ---------- */
 
 const $ = sel => document.querySelector(sel);
@@ -552,6 +719,9 @@ const S = {
   round: 0,
   izabrani: [],
   kazne: [],
+  preostalo: 1,
+  kalkEkipno: false,
+  prognoza: null,
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -567,6 +737,7 @@ const S = {
      kratko funkcija(red) -> kraća verzija za telefon (podrazumijevano kratkoIme)  */
 
 const FORMAT = {
+  pct: v => dec(v * 100, 1) + '%',
   int: v => broj(v),
   dec: v => dec(v, 1),
   dec0: v => broj(Math.round(v)),
@@ -941,9 +1112,144 @@ function renderStat() {
   renderTabelaStat();
 }
 
+/* ---------- prognoza: prikaz ---------- */
+
+const KOL_PROGNOZA = [
+  { key: 'mjesto', lbl: 'Mj.', tip: 'int', uloga: 'mjesto', asc: true },
+  { key: 'ime', lbl: 'Takmičar', tip: 'txt', uloga: 'ime', kratko: r => r.jeKlub ? kratkiKlub(r.ime) : kratkoIme(r.ime) },
+  { key: 'plasman', lbl: 'Sada', tip: 'int', asc: true },
+  { key: 'pobjeda', lbl: 'Pobjeda u kolu', tip: 'pct' },
+  { key: 'top3', lbl: 'Top 3 u kolu', tip: 'pct' },
+  { key: 'titula', lbl: 'Šansa za titulu', tip: 'pct' },
+];
+
+function preostaloKola() {
+  return Math.max(0, UKUPNO_KOLA - S.sez.kola.length);
+}
+
+function osnovaZa(ekipno) {
+  return ekipno ? saPromjenom(S.sez.snapshotsEk) : saPromjenom(S.sez.snapshots);
+}
+
+// prosječan zbir sektorskih plasmana po odigranom kolu
+function prosjeciPoKolu(ekipno) {
+  const izvor = ekipno ? S.stat.perKlub : S.stat.perTakmicar;
+  return new Map(izvor.map(v => [v.kljuc, v.kolaOdigrao ? v.plasman / v.kolaOdigrao : 0]));
+}
+
+function renderKontrole() {
+  const pre = S.preostalo;
+  const kola = [];
+  for (let i = 1; i <= Math.max(3, preostaloKola()); i++) {
+    kola.push(`<button type="button" class="round-btn${i === pre ? ' is-active' : ''}" data-preostalo="${i}">${i}</button>`);
+  }
+  $('#prog-kontrole').innerHTML =
+    `<div class="prog-grupa"><span class="prog-lbl">Preostalo kola</span><div class="prog-dugmad">${kola.join('')}</div></div>` +
+    `<div class="prog-grupa"><span class="prog-lbl">Pogled</span><div class="prog-dugmad">` +
+    `<button type="button" class="round-btn${S.kalkEkipno ? '' : ' is-active'}" data-ekipno="0">Pojedinačno</button>` +
+    `<button type="button" class="round-btn${S.kalkEkipno ? ' is-active' : ''}" data-ekipno="1">Ekipno</button>` +
+    `</div></div>`;
+}
+
+function renderKalkulator() {
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const osnova = osnovaZa(ekipno);
+  const prosjeci = prosjeciPoKolu(ekipno);
+  const { min, max } = rasponKola(S.sez, ekipno);
+  const kandidati = osnova.slice(0, ekipno ? osnova.length : 8);
+  const moze = mozeDoTitule(osnova, preostalo, min, max);
+
+  const redovi = kandidati.map(v => {
+    const pocetna = Math.round(prosjeci.get(v.kljuc) ?? min);
+    const ime = ekipno ? kratkiKlub(v.ime) : v.ime;
+    return `<div class="kalk-red" data-kljuc="${v.kljuc}">
+      <div class="kalk-ko"><span class="kalk-ime">${ime}</span>
+        <span class="kalk-sad">sada ${v.plasman}</span>
+        ${moze.get(v.kljuc) ? '' : '<span class="kalk-ne">bez šanse za titulu</span>'}</div>
+      <div class="kalk-klizac">
+        <input type="range" min="${min}" max="${max}" value="${pocetna}" data-kljuc="${v.kljuc}" aria-label="Pretpostavljeni zbir po kolu za ${ime}">
+        <output class="kalk-vrijednost">${pocetna}</output>
+      </div>
+      <div class="kalk-krajnje"><span class="kalk-mjesto">-</span><span class="kalk-ukupno">-</span></div>
+    </div>`;
+  }).join('');
+
+  $('#kalk-tabela').innerHTML =
+    `<div class="kalk-zaglavlje"><span>${ekipno ? 'Klub' : 'Takmičar'}</span>` +
+    `<span>Pretpostavljeni zbir u svakom preostalom kolu (${min} najbolje, ${max} najgore)</span>` +
+    `<span>Poslije ${preostalo} ${preostalo === 1 ? 'kola' : 'kola'}</span></div>${redovi}`;
+
+  osvjeziKalkulator();
+}
+
+// Mijenja samo brojeve, ne i klizače, da se ne gubi prst sa klizača dok se vuče.
+function osvjeziKalkulator() {
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const osnova = osnovaZa(ekipno);
+  const prosjeci = prosjeciPoKolu(ekipno);
+
+  const pretpostavke = new Map();
+  $('#kalk-tabela').querySelectorAll('input[type=range]').forEach(el => {
+    pretpostavke.set(el.dataset.kljuc, Number(el.value));
+  });
+
+  const konacno = scenarij(osnova, pretpostavke, preostalo, prosjeci);
+  const poKljucu = new Map(konacno.map(v => [v.kljuc, v]));
+  const prvak = konacno[0];
+
+  $('#kalk-tabela').querySelectorAll('.kalk-red').forEach(red => {
+    const v = poKljucu.get(red.dataset.kljuc);
+    if (!v) return;
+    red.querySelector('.kalk-vrijednost').textContent = v.poKolu;
+    red.querySelector('.kalk-mjesto').textContent = v.konacnoMjesto + '.';
+    red.querySelector('.kalk-ukupno').textContent = v.konacni;
+    red.classList.toggle('je-prvak', v.kljuc === prvak.kljuc);
+  });
+
+  $('#kalk-ishod').innerHTML =
+    `<span class="kalk-kruna">Prvak</span><b>${ekipno ? kratkiKlub(prvak.ime) : prvak.ime}</b>` +
+    `<span class="kalk-detalj">sa ${prvak.konacni} sektorskih plasmana</span>`;
+}
+
+function renderPrognoza() {
+  renderKontrole();
+  renderKalkulator();
+
+  const ekipno = S.kalkEkipno;
+  const preostalo = S.preostalo;
+  const kljucProg = `${preostalo}`;
+  if (!S.prognoza || S.prognoza.kljuc !== kljucProg) {
+    S.prognoza = { kljuc: kljucProg, rez: prognoza(S.sez, preostalo) };
+  }
+  const p = S.prognoza.rez;
+
+  const osnova = osnovaZa(ekipno);
+  const sljedece = ekipno ? p.ekipnoSljedece : p.sljedece;
+  const titule = ekipno ? p.ekipnaTitula : p.titula;
+  const redovi = osnova.map(v => {
+    const s = sljedece.get(v.kljuc) || { pobjeda: 0, top3: 0 };
+    return {
+      kljuc: v.kljuc, mjesto: v.mjesto, ime: v.ime, jeKlub: ekipno, poena: v.poena,
+      plasman: v.plasman, pobjeda: s.pobjeda, top3: s.top3, titula: titule.get(v.kljuc) || 0,
+    };
+  });
+
+  $('#prog-tabela').innerHTML = crtajTabelu('prognoza', 'prognoza', KOL_PROGNOZA, redovi, {
+    pocetni: { key: 'titula', dir: -1 },
+  });
+
+  const sljedeceKolo = RIMSKI[S.sez.kola.length + 1] || (S.sez.kola.length + 1);
+  $('#prog-uvod').innerHTML =
+    `Sljedeće je <b>${sljedeceKolo} kolo</b>. Računar je odigrao ` +
+    `${broj(p.broj)} zamišljenih sezona, svaki put izvlačeći svakom takmičaru sesije ` +
+    `nalik onima koje je stvarno lovio, pa prebrojao koliko puta je ko bio prvi.`;
+}
+
 // koji prikaz se ponovo crta poslije klika na zaglavlje tabele
 const PRIKAZI = { rang: renderRang, ekipno: renderEkipno, kola: renderKola,
-  stat: renderTabelaStat, statKlub: renderTabelaKlub };
+  stat: renderTabelaStat, statKlub: renderTabelaKlub, prognoza: renderPrognoza };
 
 /* ---------- tabovi ---------- */
 
@@ -954,6 +1260,7 @@ function prikaziTab(id) {
   document.querySelectorAll('.panel').forEach(p => { p.hidden = p.dataset.panel !== id; });
   if (id === 'kola') renderKola();
   if (id === 'stat') renderStat();
+  if (id === 'prognoza') renderPrognoza();
   if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
 }
 
@@ -963,6 +1270,8 @@ function renderSve() {
   const zadnje = renderRang();
   renderEkipno();
   S.round = S.sez.kola.length - 1;
+  S.preostalo = Math.max(1, UKUPNO_KOLA - S.sez.kola.length);
+  S.prognoza = null;
 
   $('#hero-godina').textContent = zadnje.godina || '';
   $('#hero-badge').textContent =
@@ -1058,12 +1367,24 @@ if (typeof document !== 'undefined') {
   });
 
   document.addEventListener('click', e => {
+    const dugme = e.target.closest('#prog-kontrole button');
+    if (dugme) {
+      if (dugme.dataset.preostalo) S.preostalo = Number(dugme.dataset.preostalo);
+      if (dugme.dataset.ekipno) S.kalkEkipno = dugme.dataset.ekipno === '1';
+      renderPrognoza();
+      return;
+    }
+
     const th = e.target.closest('th.sortable');
     if (!th) return;
     const { tabela, prikaz, key, tip, asc } = th.dataset;
     const st = S.sort[tabela];
     S.sort[tabela] = { key, dir: st && st.key === key ? -st.dir : (tip === 'txt' || asc === '1' ? 1 : -1) };
     (PRIKAZI[prikaz] || (() => {}))();
+  });
+
+  document.addEventListener('input', e => {
+    if (e.target.matches('#kalk-tabela input[type=range]')) osvjeziKalkulator();
   });
 
   document.getElementById('tabs').addEventListener('click', e => {
@@ -1096,5 +1417,7 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne };
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne,
+    prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, UKUPNO_KOLA,
+    KOL_PROGNOZA };
 }

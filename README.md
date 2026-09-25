@@ -58,6 +58,30 @@ Ime se uparuje bez kvačica i viška razmaka. Ako se ne pronađe u tom kolu, saj
 ispiše upozorenje u konzoli browsera i ne mijenja ništa. Takmičar sa kaznom
 dobija zvjezdicu uz ime, a ispod tabela tog kola piše razlog.
 
+## Prognoza
+
+Tab **Prognoza** ima dvije odvojene stvari, namjerno razdvojene jer nisu iste vrste:
+
+**Kalkulator titule** je običan račun. Povuku se klizači (pretpostavljeni zbir
+sektorskih plasmana po kolu) i vidi se ko je prvak pod tom pretpostavkom. Nikad
+ne griješi jer ništa ne pogađa.
+
+**Šanse** su Monte Carlo simulacija: svakom takmičaru se 10.000 puta izvlače
+sesije nalik onima koje je stvarno lovio, pa se prebroji koliko puta je bio prvi.
+Sjeme slučajnih brojeva je fiksno (`SIMULACIJA.sjeme`), pa se procenti ne mijenjaju
+sami od sebe pri osvježavanju stranice.
+
+Sa malo odigranih kola je istorija preuska i model postaje pretjerano siguran:
+bez ublažavanja je poslije I kola davao favoritu 72%, a stvarnom pobjedniku 0,0%.
+Zato se uz stvarnu istoriju miješa i `SIMULACIJA.ublazavanje` nasumičnih sesija.
+Provjereno unazad na odigranim kolima, greška za pogađanje prva tri padne sa
+0,100 na 0,088 (nasumično pogađanje je 0,180). Favorit modela je dobio kolo
+1 od 3 puta. Te brojke stoje i na samoj stranici, da niko ne misli da je ovo
+proročanstvo.
+
+Broj kola u sezoni je `UKUPNO_KOLA` u `app.js` (trenutno 6). Iz njega se računa
+koliko je kola preostalo, a na stranici se može i ručno promijeniti.
+
 ## Pravila obračuna
 
 Ista kao u `popuni_tabelu.py`:

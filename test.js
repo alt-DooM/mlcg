@@ -12,7 +12,8 @@ const assert = require('assert');
 
 global.XLSX = require('./vendor/xlsx.full.min.js');
 const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
-        crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne } = require('./app.js');
+        crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
+        prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -256,5 +257,57 @@ const poRibi = imenaIz(crtajTabelu('k', 'statKlub', KOL_KLUB, st.perKlub));
 assert.deepStrictEqual(poRibi, st.perKlub.slice().sort((a, b) => b.riba - a.riba).map(k => k.ime), 'klubovi po ribi');
 S.sort = {};
 console.log('  OK  zajednicka tabela: sortiranje, zakovane kolone, kratko ime, klubovi');
+
+/* --- 7. prognoza: kalkulator je racun, simulacija je simulacija --- */
+
+const preostalo = UKUPNO_KOLA - sez.kola.length;
+assert.strictEqual(preostalo, 2, 'sezona ima 6 kola, odigrana su 4');
+
+const osnova = saPromjenom(sez.snapshots);
+const { min, max } = rasponKola(sez, false);
+assert.ok(min >= 3 && max <= 27 && min < max, `raspon zbira po kolu (${min}-${max})`);
+
+// kalkulator mora da daje tacno ono sto se rucno izracuna
+const prosjeci = new Map(st.perTakmicar.map(v => [v.kljuc, v.plasman / v.kolaOdigrao]));
+const vodeci = osnova[0], drugi = osnova[1];
+let sc = scenarij(osnova, new Map([[vodeci.kljuc, max], [drugi.kljuc, min]]), preostalo, prosjeci);
+let poK = new Map(sc.map(v => [v.kljuc, v]));
+assert.strictEqual(poK.get(vodeci.kljuc).konacni, vodeci.plasman + max * preostalo);
+assert.strictEqual(poK.get(drugi.kljuc).konacni, drugi.plasman + min * preostalo);
+assert.ok(poK.get(drugi.kljuc).konacnoMjesto < poK.get(vodeci.kljuc).konacnoMjesto,
+  'ko odigra najbolje mora prestici onoga ko odigra najgore');
+
+// bez ijedne pretpostavke svako zadrzava svoj prosjek
+sc = scenarij(osnova, new Map(), preostalo, prosjeci);
+assert.strictEqual(sc.length, osnova.length, 'scenarij pokriva cijelu tabelu');
+assert.strictEqual(sc[0].konacni, Math.min(...sc.map(v => v.konacni)), 'tabela je sortirana po konacnom zbiru');
+
+// matematicka mogucnost: vodeci uvijek moze, posljednji ne moze
+const moze = mozeDoTitule(osnova, preostalo, min, max);
+assert.strictEqual(moze.get(osnova[0].kljuc), true, 'vodeci uvijek moze do titule');
+assert.strictEqual(moze.get(osnova[osnova.length - 1].kljuc), false, 'posljednji ne moze');
+
+// simulacija: iste brojke pri svakom pokretanju, i sve sanse se sabiraju u 1
+const p1 = prognoza(sez, preostalo, { broj: 3000 });
+const p2 = prognoza(sez, preostalo, { broj: 3000 });
+assert.deepStrictEqual([...p1.titula], [...p2.titula], 'simulacija mora biti ponovljiva');
+const suma = m => [...m.values()].reduce((a, v) => a + (typeof v === 'number' ? v : v.pobjeda), 0);
+for (const [naziv, m] of [['titula', p1.titula], ['ekipna titula', p1.ekipnaTitula],
+                          ['pobjeda u kolu', p1.sljedece], ['ekipna pobjeda', p1.ekipnoSljedece]]) {
+  assert.ok(Math.abs(suma(m) - 1) < 0.02, `${naziv}: sanse se moraju sabrati u 100% (dobijeno ${suma(m).toFixed(3)})`);
+  for (const v of m.values()) {
+    const x = typeof v === 'number' ? v : v.pobjeda;
+    assert.ok(x >= 0 && x <= 1, `${naziv}: vjerovatnoca van 0..1`);
+  }
+}
+// vodeci na tabeli mora imati najvecu sansu za titulu
+assert.strictEqual([...p1.titula.entries()].sort((a, b) => b[1] - a[1])[0][0], osnova[0].kljuc,
+  'vodeci mora imati najvecu sansu za titulu');
+// ko matematicki ne moze do titule, ne smije imati nijednu simuliranu titulu
+for (const [k, v] of p1.titula) if (moze.get(k) === false) assert.strictEqual(v, 0, 'nemoguce a simulirano');
+// bez preostalih kola nista ne puca
+const p0 = prognoza(sez, 0, { broj: 200 });
+assert.ok(p0.sljedece.size > 0 && [...p0.titula.values()].every(v => v === 0));
+console.log(`  OK  prognoza: kalkulator tacan, simulacija ponovljiva (${preostalo} preostala kola)`);
 
 console.log(`\nSve provjere prošle (${ok} redova protiv Python izlaza, ${poredjeno} protiv dokumenta saveza).`);
