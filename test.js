@@ -16,7 +16,7 @@ const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
         staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka } = require('./app.js');
 
-const KOLA = [1, 2, 3, 4].map(i => `data/kolo-${i}.xlsx`);
+const KOLA = [1, 2, 3, 4, 5].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
 
 const ucitaj = p => XLSX.read(new Uint8Array(fs.readFileSync(p)), { type: 'array' });
@@ -44,8 +44,8 @@ kola.forEach(k => primijeniKazne(k, KAZNE));
 const sez = sezona(kola);
 const zadnji = sez.snapshots.length - 1;
 
-assert.strictEqual(sez.kola.length, 4, 'očekivana su 4 kola');
-assert.deepStrictEqual(sez.kola.map(k => k.kolo), [1, 2, 3, 4], 'brojevi kola iz TABELA sheeta');
+assert.strictEqual(sez.kola.length, 5, 'očekivano je 5 kola');
+assert.deepStrictEqual(sez.kola.map(k => k.kolo), [1, 2, 3, 4, 5], 'brojevi kola iz TABELA sheeta');
 assert.ok(sez.kola.every(k => k.sluzbeno), 'sva kola moraju koristiti službeni POJEDINACNO sheet');
 
 /* --- 1. kumulativno kroz III kolo protiv Python izlaza --- */
@@ -132,6 +132,77 @@ primijeniKazne(nepostojeci, [{ kolo: 4, takmicar: 'NEKO KOGA NEMA', plasman: 99 
 assert.strictEqual(nepostojeci.kazne.length, 0, 'kazna na nepoznato ime se preskace');
 console.log(`  OK  IV kolo protiv dokumenta saveza: ${poredjeno} redova, kazna primijenjena`);
 
+/* --- 2b. V kolo protiv zvanicnog dokumenta saveza ---
+
+   Marko Bakic je dobio zuti karton i 5 kaznenih plasmana, isto kao Trebjesanin
+   u IV kolu; kazna stoji u data/kazne.json.
+
+   ZNANO NESLAGANJE: dokument vodi Gorana Obrenovica sa 14 sektorskih bodova,
+   a xlsx sa 15. Xlsx je sam sa sobom saglasan na dva mjesta: sesije mu daju
+   7+6+2=15, i njegova sopstvena celija ZBIR SEKTORSKIH PLASMANA kaze 15.
+   Razlika ide u korist takmicara, pa nije sudijska kazna. Na ukupne tabele ne
+   utice nista (provjereno u oba smjera), pa sajt racuna po xlsx-u kao i uvijek.
+   Kad savez razjasni: obrisi RAZLIKA_V ispod. */
+
+const RAZLIKA_V = { takmicar: 'GORAN OBRENOVIC', klub: 'SRFFK MANIRO - KOLASIN', razlika: 1 };
+
+const REF_V_POJEDINACNO = [
+  ['RADULE MIĆOVIĆ', 7220, 6], ['MILUN ĐUROVIĆ', 8640, 7], ['ALEKSANDAR GAŠEVIĆ', 8060, 7],
+  ['RADOVAN KRKOVIĆ', 8000, 8], ['MEHMED DŽIDIĆ', 3920, 10], ['VLATKO PEKOVIĆ', 7000, 11],
+  ['BALŠA FUŠTIĆ', 3540, 11], ['BOJAN GOVEDARICA', 5700, 12], ['BOŠKO VULEVIĆ', 4840, 12],
+  ['ARSO JEREMIĆ', 3940, 13], ['BOGDAN MARKOVIĆ', 3100, 13], ['MILAN FUŠTIĆ', 4520, 14],
+  ['GORAN OBRENOVIĆ', 3160, 14], ['IVICA RAJKOVIĆ', 4940, 15], ['PETAR OBRADOVIĆ', 4060, 16],
+  ['NIKOLA POPOVIĆ', 3100, 16], ['KEMAL AJANOVIĆ', 3560, 17], ['NIKOLA TREBJEŠANIN', 1880, 17],
+  ['MARKO BAKIĆ', 3940, 18], ['NIKOLA ĐALOVIĆ', 3100, 19], ['OMAR BAŠIĆ', 2060, 19],
+  ['SAVO RAIČEVIĆ', 1460, 20], ['DAMIR CANOVIĆ', 1580, 21], ['BOGDAN GOVEDARICA', 1780, 23],
+  ['MUMIN HEKALO', 780, 24], ['MILJAN ANĐIĆ', 520, 27], ['ORHAN BAŠIĆ', 0, 27],
+];
+
+const REF_V_EKIPNO = [
+  ['SRK LIM - BERANE', 20700, 25], ['SRFFK RAVNJAK - MOJKOVAC', 16120, 32],
+  ['SRFFK MANIRO - KOLAŠIN', 14260, 35], ['SRK KOLAŠIN', 11980, 44],
+  ['SRK LIPLJEN - PLJEVLJA', 8260, 51], ['SRK VODENE LISICE - PODGORICA', 11100, 53],
+  ['SRK GORŠTAK - KOLAŠIN', 9400, 55], ['SRK TARA - MOJKOVAC', 8940, 55],
+  ['SRK PLAVSKO JEZERO', 3640, 67],
+];
+
+const kolo5 = sez.kola[4];
+for (const [ime, poena, plasman] of REF_V_POJEDINACNO) {
+  const r = kolo5.rezultati.get(kljuc(ime));
+  assert.ok(r, `V kolo: '${ime}' nije nađen u xlsx-u`);
+  assert.strictEqual(r.poena, poena, `V kolo: '${ime}' poeni (naš ${r.poena}, savez ${poena})`);
+  const ocekivano = kljuc(ime) === RAZLIKA_V.takmicar ? plasman + RAZLIKA_V.razlika : plasman;
+  assert.strictEqual(r.plasman, ocekivano, `V kolo: '${ime}' plasman (naš ${r.plasman}, ocekivano ${ocekivano})`);
+  poredjeno++;
+}
+const ekipno5 = rezultatiEkipno(kolo5);
+for (const [ime, poena, plasman] of REF_V_EKIPNO) {
+  const e = ekipno5.get(kljuc(kanonKlub(ime)));
+  assert.ok(e, `V kolo ekipno: '${ime}' nije nađen`);
+  assert.strictEqual(e.poena, poena, `V kolo ekipno: '${ime}' poeni (naš ${e.poena}, savez ${poena})`);
+  const ocekivano = kljuc(ime) === RAZLIKA_V.klub ? plasman + RAZLIKA_V.razlika : plasman;
+  assert.strictEqual(e.plasman, ocekivano, `V kolo ekipno: '${ime}' plasman (naš ${e.plasman}, ocekivano ${ocekivano})`);
+  poredjeno++;
+}
+assert.strictEqual(kolo5.rezultati.get(kljuc('MARKO BAKIĆ')).kazna, 5, 'zuti karton Marka Bakica');
+assert.strictEqual(kolo5.kazne.length, 1, 'V kolo ima tacno jednu kaznu');
+// sporni bod ne smije da pomjeri nikoga na ukupnoj tabeli
+const bezSpora = sezona(KOLA.map(p => {
+  const k = parsirajKolo(new Uint8Array(fs.readFileSync(p)), p);
+  primijeniKazne(k, KAZNE);
+  return k;
+}).map((k, i) => {
+  if (i === 4) k.rezultati.get(kljuc('GORAN OBRENOVIĆ')).plasman -= RAZLIKA_V.razlika;
+  return k;
+}));
+assert.deepStrictEqual(
+  bezSpora.snapshots[4].map(v => v.kljuc), sez.snapshots[4].map(v => v.kljuc),
+  'sporni bod ne smije da promijeni redosljed pojedinacne tabele');
+assert.deepStrictEqual(
+  bezSpora.snapshotsEk[4].map(v => v.kljuc), sez.snapshotsEk[4].map(v => v.kljuc),
+  'sporni bod ne smije da promijeni redosljed ekipne tabele');
+console.log(`  OK  V kolo protiv dokumenta saveza: ${REF_V_POJEDINACNO.length + REF_V_EKIPNO.length} redova, sporni bod bez uticaja`);
+
 /* --- 3. aliasi i ključevi --- */
 
 assert.strictEqual(kanonKlub('SRK LIPLJEN'), kanonKlub('SRK LIPLJEN - PLJEVLJA'));
@@ -147,8 +218,8 @@ console.log('  OK  aliasi klubova i ključ imena');
 /* --- 4. statistika po takmičaru i po klubu --- */
 
 const st = statistika(sez);
-assert.strictEqual(st.ukupno.kola, 4);
-assert.strictEqual(st.ukupno.sesija, 12);
+assert.strictEqual(st.ukupno.kola, 5);
+assert.strictEqual(st.ukupno.sesija, 15);
 assert.strictEqual(st.perTakmicar.length, sez.snapshots[zadnji].length, 'statistika pokriva sve takmičare');
 assert.ok(st.ukupno.riba > 0 && st.ukupno.najduza > 0);
 assert.strictEqual(st.perKlub.length, 9);
@@ -174,7 +245,7 @@ for (const k of st.perKlub) {
   assert.ok(e, `klub '${k.ime}' nije u ekipnoj rang listi`);
   assert.strictEqual(k.poena, e.poena, `${k.ime}: poeni se ne slažu sa ekipnom tabelom`);
   assert.strictEqual(k.plasman, e.plasman, `${k.ime}: plasman se ne slaže sa ekipnom tabelom`);
-  assert.strictEqual(k.kolaOdigrao, 4, `${k.ime}: svi klubovi su nastupili u sva 4 kola`);
+  assert.strictEqual(k.kolaOdigrao, 5, `${k.ime}: svi klubovi su nastupili u svih 5 kola`);
   assert.ok(k.najbolje >= 1 && k.najgore >= k.najbolje && k.najgore <= 9, `${k.ime}: raspon plasmana u kolu`);
   assert.ok(k.takmicara >= 3, `${k.ime}: klub ima najmanje tri takmičara`);
   assert.ok(k.nule <= k.sesija, `${k.ime}: sesija bez ribe ne može biti više od odigranih`);
@@ -193,7 +264,7 @@ const mape = sez.snapshots.map(sn => new Map(sn.map((v, i) => [v.kljuc, i + 1]))
 const svi = sez.snapshots[zadnji].map(v => ({ kljuc: v.kljuc, ime: v.ime, v: mape.map(m => m.get(v.kljuc) ?? null) }));
 for (const w of [null, 380]) {
   if (w === null) delete global.window; else global.window = { innerWidth: w };
-  for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1, 1] }], []]) {
+  for (const slucaj of [svi.slice(0, 3), svi.slice(0, 1), [{ ime: 'x', v: [1, 1, 1, 1, 1] }], []]) {
     const svg = crtajLinije(slucaj, svi.length);
     assert.ok(!/NaN|Infinity|undefined/.test(svg), `grafikon (${w || 'desktop'}) ima nevalidnu koordinatu`);
     const vb = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
@@ -262,7 +333,7 @@ console.log('  OK  zajednicka tabela: sortiranje, zakovane kolone, kratko ime, k
 /* --- 7. prognoza: kalkulator je racun, simulacija je simulacija --- */
 
 const preostalo = UKUPNO_KOLA - sez.kola.length;
-assert.strictEqual(preostalo, 2, 'sezona ima 6 kola, odigrana su 4');
+assert.strictEqual(preostalo, 1, 'sezona ima 6 kola, odigrano je 5');
 
 const osnova = saPromjenom(sez.snapshots);
 const { min, max } = rasponKola(sez, false);

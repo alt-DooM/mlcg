@@ -54,6 +54,10 @@ Ekipni plasman kluba se sam popravi, jer se računa iz rezultata njegovih takmi�
 Kazna namjerno nije upisana u sam xlsx: ako neko kasnije ponovo uploaduje
 originalni fajl saveza, kazna bi nestala bez traga. Ovako preživi.
 
+Do sada viđene kazne: IV kolo Nikola Trebješanin +5 (žuti karton), V kolo
+Marko Bakić +5 (žuti karton). Žuti karton je dosad uvijek nosio 5 plasman-poena,
+ali se vrijednost čita iz dokumenta saveza, ne pretpostavlja.
+
 Ime se uparuje bez kvačica i viška razmaka. Ako se ne pronađe u tom kolu, sajt
 ispiše upozorenje u konzoli browsera i ne mijenja ništa. Takmičar sa kaznom
 dobija zvjezdicu uz ime, a ispod tabela tog kola piše razlog.
