@@ -14,7 +14,8 @@ global.XLSX = require('./vendor/xlsx.full.min.js');
 const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije, S,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
-        staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka } = require('./app.js');
+        staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka,
+        profilTerena, poeniZaDuzinu, koordinateZa, uISO } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4, 5].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -441,6 +442,47 @@ for (const v of [osnova[0], osnova[Math.floor(osnova.length / 2)], osnova[osnova
 const vrh = licnaTrka(osnova, prosjeci, preostalo, min, max, osnova[0].kljuc);
 assert.strictEqual(vrh.najbolje, 1, 'vodeci sa najboljim ishodom zavrsava prvi');
 assert.strictEqual(vrh.komsije.filter(k => k.mjesto < vrh.sada.mjesto).length, 0, 'ispred vodeceg nema nikoga');
+
+/* --- 8. karton rijeke --- */
+
+// bodovanje: provjereno na svakoj pojedinacnoj ribi, bez izuzetka
+let ribaUkupno = 0;
+for (const kolo of sez.kola) {
+  for (const r of kolo.rezultati.values()) {
+    for (let s = 0; s < 3; s++) {
+      const d = r.duzine[s] || [];
+      assert.strictEqual(d.length, r.riba[s], `${r.ime}, kolo ${kolo.kolo}, sesija ${s + 1}: broj procitanih riba`);
+      const bod = d.reduce((a, cm) => a + poeniZaDuzinu(cm), 0);
+      assert.strictEqual(bod, r.sesije[s] ? r.sesije[s].poena : 0,
+        `${r.ime}, kolo ${kolo.kolo}, sesija ${s + 1}: poeni iz duzina se ne slazu sa zbirom saveza`);
+      if (d.length) assert.strictEqual(Math.max(...d), r.najduza[s], `${r.ime}: najduza riba`);
+      ribaUkupno += d.length;
+    }
+  }
+}
+assert.strictEqual(ribaUkupno, 864, 'ocekivano je 864 ribe u pet kola');
+assert.strictEqual(poeniZaDuzinu(20), 500);
+assert.strictEqual(poeniZaDuzinu(48), 1060);
+assert.ok(2 * poeniZaDuzinu(20) > poeniZaDuzinu(40), 'dvije male ribe nose vise od jedne velike');
+
+const tereni = profilTerena(sez);
+assert.strictEqual(tereni.length, 4, 'pet kola na cetiri terena');
+assert.strictEqual(tereni.reduce((a, t) => a + t.ukupnoRiba, 0), ribaUkupno, 'sve ribe su rasporedjene po terenima');
+assert.strictEqual(tereni.reduce((a, t) => a + t.brojKola, 0), sez.kola.length);
+for (const t of tereni) {
+  assert.strictEqual(t.poSesiji.reduce((a, b) => a + b, 0), t.ukupnoRiba, `${t.mjesto}: zbir po sesijama`);
+  assert.ok(Math.abs(t.raspodjela.reduce((a, r) => a + r.udio, 0) - 1) < 1e-9, `${t.mjesto}: raspodjela se sabira u 1`);
+  assert.ok(t.najveca >= t.prosjek && t.prosjek >= 20, `${t.mjesto}: prosjek i maksimum`);
+  assert.ok(t.praznihUdio >= 0 && t.praznihUdio <= 1, `${t.mjesto}: udio praznih sesija`);
+  assert.ok(koordinateZa(t.mjesto), `${t.mjesto}: nema koordinata za vrijeme`);
+}
+// Lim je rijeka sitne ribe, Tara krupnije; ako se to okrene, profil je pukao
+const lim = tereni.find(t => /Lim/i.test(t.mjesto));
+const tara = tereni.find(t => /Tara, Mojkovac/i.test(t.mjesto));
+assert.ok(lim.prosjek < tara.prosjek, 'Lim ima sitniju ribu od Tare');
+assert.strictEqual(uISO('27. 09. 2026'), '2026-09-27');
+assert.strictEqual(uISO('nema datuma'), null);
+console.log(`  OK  karton rijeke: ${ribaUkupno} riba, ${tereni.length} terena, bodovanje 20/cm + 100`);
 
 console.log(`  OK  prognoza: kalkulator tacan, granice tacne, simulacija ponovljiva (${preostalo} preostala kola, ${zivi.length} jos u igri)`);
 

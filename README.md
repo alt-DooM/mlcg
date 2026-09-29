@@ -86,6 +86,29 @@ proročanstvo.
 Broj kola u sezoni je `UKUPNO_KOLA` u `app.js` (trenutno 6). Iz njega se računa
 koliko je kola preostalo, a na stranici se može i ručno promijeniti.
 
+## Karton rijeke
+
+Tab **Rijeke** gradi profil svakog terena iz pojedinačnih riba. U `GRUPA`
+sheetovima je zapisana svaka ulovljena riba sa dužinom u cm, njih 864 kroz pet
+kola. Iz toga ide raspodjela dužina, ulov po sesijama, koliko riba dobija sesiju
+i koliko sesija završi bez ribe.
+
+Bodovanje je linearno i provjereno na svih 864 ribe bez ijednog izuzetka:
+
+```
+poeni = 20 x dužina(cm) + 100
+```
+
+Onih ravnih 100 po ribi znači da broj riba uvijek tuče veličinu: dvije od 20 cm
+nose 1000, jedna od 40 cm nosi 900. Test provjerava i da se poeni izračunati iz
+dužina poklapaju sa zbirovima saveza za svaku sesiju svakog takmičara.
+
+Vrijeme na dan kola se povlači sa Open-Meteo, bez registracije i bez ključa, i
+kešira se u browseru. Koordinate terena su u `KOORDINATE` u `app.js`; novi teren
+treba dodati tamo. Temperatura vode i vodostaj se ne mogu besplatno povući ni
+sa jednog javnog servisa za crnogorske rijeke, pa ih nema. Ako vrijeme ne stigne,
+sekcija se jednostavno ne prikaže.
+
 ## Pravila obračuna
 
 Ista kao u `popuni_tabelu.py`:

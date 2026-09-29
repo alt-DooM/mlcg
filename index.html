@@ -24,6 +24,7 @@
     <button type="button" class="tab" data-tab="ekipno">Ekipno</button>
     <button type="button" class="tab" data-tab="kola">Kola</button>
     <button type="button" class="tab" data-tab="stat">Statistika</button>
+    <button type="button" class="tab" data-tab="rijeke">Rijeke</button>
     <button type="button" class="tab" data-tab="prognoza">Prognoza</button>
   </nav>
 
@@ -155,6 +156,25 @@
         </ul>
         <p>Drugim riječima: šanse za titulu su upotrebljive jer se računaju na dva
           cijela kola, a pobjednika jednog kola uzmi kao zanimljivost, ne kao najavu.</p>
+      </div>
+    </section>
+    <section class="panel" data-panel="rijeke" hidden>
+      <div class="rijeka-izbor" id="rijeka-izbor"></div>
+      <div class="kpi-grid" id="rijeka-kpi"></div>
+
+      <h3 class="sub-title">Dužine ulovljenih riba</h3>
+      <div class="card card-pad" id="rijeka-histogram"></div>
+      <div class="rasp-red" id="rijeka-raspodjela"></div>
+
+      <h3 class="sub-title">Ulov po sesijama</h3>
+      <div class="card card-pad sesije" id="rijeka-sesije"></div>
+
+      <h3 class="sub-title">Broj riba tuče veličinu</h3>
+      <div class="card card-pad bodovi" id="rijeka-bodovi"></div>
+
+      <div id="rijeka-vrijeme-sekcija" hidden>
+        <h3 class="sub-title">Vrijeme na dan kola</h3>
+        <div class="card card-pad vrijeme" id="rijeka-vrijeme"></div>
       </div>
     </section>
   </main>

@@ -195,10 +195,17 @@ function procitajGrupu(g) {
       if (norm === 'DUŽINA-CM' || norm === 'IME I PREZIME') continue;
       const k = kljuc(ime);
       if (!out.has(k)) out.set(k, {});
+      // svaka ulovljena riba je svoj red: duzina u cm, pa poeni
+      const duzine = [];
+      for (let rr = imenaR[s] + 2; rr < poeniR[s]; rr++) {
+        const d = cell(g, rr, c);
+        if (typeof d === 'number' && d > 0) duzine.push(d);
+      }
       out.get(k)[s + 1] = {
         riba: Number(cell(g, ribaR[s], c + 1) || 0),
         poena: Number(cell(g, poeniR[s], c + 1) || 0),
         najduza: duzR[s] ? Number(cell(g, duzR[s], c + 1) || 0) : 0,
+        duzine,
       };
     }
   }
@@ -239,6 +246,10 @@ function rezultatiKola(kolo, pojedinacno) {
     const p = gr && kolo.grupe[gr] && kolo.grupe[gr].get(k);
     return [1, 2, 3].map(s => (p && p[s] ? p[s][polje] : 0));
   };
+  const duzineIz = (gr, k) => {
+    const p = gr && kolo.grupe[gr] && kolo.grupe[gr].get(k);
+    return [1, 2, 3].map(s => (p && p[s] && p[s].duzine ? p[s].duzine : []));
+  };
 
   if (pojedinacno) {
     for (const [k, v] of pojedinacno) {
@@ -248,6 +259,7 @@ function rezultatiKola(kolo, pojedinacno) {
         sesije: v.sesije,
         riba: izGrupe(i.grupa, k, 'riba'),
         najduza: izGrupe(i.grupa, k, 'najduza'),
+        duzine: duzineIz(i.grupa, k),
         poena: v.poena, plasman: v.plasman,
       });
     }
@@ -271,6 +283,7 @@ function rezultatiKola(kolo, pojedinacno) {
           out.set(k, {
             kljuc: k, ime: lijepoIme(ime), klub: i.klub || '', grupa: gr, sifra: i.sifra || null,
             sesije: [], riba: izGrupe(gr, k, 'riba'), najduza: izGrupe(gr, k, 'najduza'),
+            duzine: duzineIz(gr, k),
             poena: 0, plasman: 0,
           });
         }
@@ -384,6 +397,79 @@ function saPromjenom(snapshots) {
     const p = prije ? prije.get(v.kljuc) : null;
     return { ...v, mjesto: i + 1, promjena: p == null ? null : p - (i + 1) };
   });
+}
+
+/* ---------- karton rijeke ---------- */
+
+/* Bodovanje je linearno i provjereno na svih 864 ribe: svaki centimetar nosi
+   20 poena, a svaka riba jos ravnih 100 povrh toga. Zato dvije ribe od 20cm
+   (1000) nose vise od jedne od 40cm (900): broj riba uvijek tuce velicinu. */
+const POENI_PO_CM = 20, POENI_PO_RIBI = 100;
+const poeniZaDuzinu = cm => POENI_PO_CM * cm + POENI_PO_RIBI;
+
+const KANTE = [[20, 24], [25, 29], [30, 34], [35, 60]];
+
+function medijana(a) {
+  if (!a.length) return 0;
+  const s = a.slice().sort((x, y) => x - y);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/* Profil svakog terena iz svih odigranih kola na njemu. */
+function profilTerena(sez) {
+  const po = new Map();
+  for (const kolo of sez.kola) {
+    const mjesto = kolo.mjesto || 'Nepoznato mjesto';
+    if (!po.has(mjesto)) {
+      po.set(mjesto, {
+        mjesto, kola: [], datumi: [], duzine: [], poSesiji: [0, 0, 0],
+        bezRibe: [0, 0, 0], ucesnika: 0, dobitne: [],
+      });
+    }
+    const t = po.get(mjesto);
+    t.kola.push(kolo.kolo);
+    t.datumi.push(kolo.datum || '');
+    t.ucesnika = Math.max(t.ucesnika, kolo.rezultati.size);
+
+    for (const r of kolo.rezultati.values()) {
+      for (let s = 0; s < 3; s++) {
+        const d = (r.duzine && r.duzine[s]) || [];
+        t.duzine.push(...d);
+        t.poSesiji[s] += d.length;
+        if (!d.length) t.bezRibe[s]++;
+      }
+    }
+    // koliko riba je trebalo da se dobije sesija
+    for (let s = 0; s < 3; s++) {
+      let naj = null;
+      for (const r of kolo.rezultati.values()) {
+        const d = (r.duzine && r.duzine[s]) || [];
+        const bod = d.reduce((a, cm) => a + poeniZaDuzinu(cm), 0);
+        if (bod > 0 && (!naj || bod > naj.bod)) naj = { bod, riba: d.length };
+      }
+      if (naj) t.dobitne.push(naj.riba);
+    }
+  }
+
+  return [...po.values()].map(t => {
+    const n = t.duzine.length || 1;
+    return {
+      ...t,
+      brojKola: t.kola.length,
+      ukupnoRiba: t.duzine.length,
+      prosjek: t.duzine.reduce((a, b) => a + b, 0) / n,
+      medijana: medijana(t.duzine),
+      najveca: t.duzine.length ? Math.max(...t.duzine) : 0,
+      raspodjela: KANTE.map(([a, b]) => ({
+        a, b, udio: t.duzine.filter(x => x >= a && x <= b).length / n,
+        broj: t.duzine.filter(x => x >= a && x <= b).length,
+      })),
+      dobitnaSesija: Math.round(medijana(t.dobitne)),
+      // koliko sesija od ukupno je zavrsilo bez ijedne ribe
+      praznihUdio: (t.bezRibe[0] + t.bezRibe[1] + t.bezRibe[2]) / (t.ucesnika * 3 * t.kola.length || 1),
+    };
+  }).sort((a, b) => b.ukupnoRiba - a.ukupnoRiba);
 }
 
 /* ---------- statistika sezone ---------- */
@@ -824,6 +910,8 @@ const S = {
   dvoboj: null,
   matricaCtx: null,
   licni: null,
+  tereni: null,
+  teren: null,
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -1491,6 +1579,188 @@ function renderPrognoza() {
     `nalik onima koje je stvarno lovio, pa prebrojao koliko puta je ko bio prvi.`;
 }
 
+/* ---------- karton rijeke: prikaz ---------- */
+
+// Lucide ikone, ucrtane direktno da sajt ne zavisi ni od kakvog CDN-a.
+const IKONE = {
+  fish: '<path d="M6.5 12c.94-3.46 4.94-6 8.5-6 3.56 0 6.06 2.54 7 6-.94 3.47-3.44 6-7 6s-7.56-2.53-8.5-6Z"/><path d="M18 12v.5"/><path d="M16 17.93a9.77 9.77 0 0 1 0-11.86"/><path d="M7 10.67C7 8 5.58 5.97 2.73 5.5c-1 1.5-1 5 .23 6.5-1.24 1.5-1.24 5-.23 6.5C5.58 18.03 7 16 7 13.33"/><path d="M10.46 7.26C10.2 5.88 9.17 4.24 8 3h5.8a2 2 0 0 1 1.98 1.67l.23 1.4"/><path d="m16.01 17.93-.23 1.4A2 2 0 0 1 13.8 21H9.5a5.96 5.96 0 0 0 1.49-3.98"/>',
+  ruler: '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  trend: '<path d="M16 17h6v-6"/><path d="m22 17-8.5-8.5-5 5L2 7"/>',
+  pin: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  kalendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  termometar: '<path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>',
+  vjetar: '<path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/>',
+  kisa: '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/>',
+  prazno: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+  talasi: '<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>',
+  sunce: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+};
+
+const ikona = (ime, cls = '') =>
+  `<svg class="ik ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"` +
+  ` stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IKONE[ime] || ''}</svg>`;
+
+/* Histogram duzina: glavna slika kartona. Jedna traka po centimetru. */
+function crtajHistogram(duzine) {
+  if (!duzine.length) return '';
+  const od = Math.min(...duzine), do_ = Math.max(...duzine);
+  const broj = new Map();
+  for (const d of duzine) broj.set(d, (broj.get(d) || 0) + 1);
+  const maxN = Math.max(...broj.values());
+
+  const W = 1000, H = 300, L = 8, R = W - 8, T = 16, B = H - 42;
+  const n = do_ - od + 1;
+  const sirina = (R - L) / n;
+  const boja = cm => cm >= 35 ? '#c8712a' : cm >= 30 ? '#2f6b45' : cm >= 25 ? '#0f4c53' : '#4d8f96';
+
+  let g = '';
+  for (let cm = od; cm <= do_; cm++) {
+    const c = broj.get(cm) || 0;
+    const h = maxN ? (c / maxN) * (B - T) : 0;
+    const x = L + (cm - od) * sirina;
+    g += `<rect x="${x + 1}" y="${B - h}" width="${Math.max(1, sirina - 2)}" height="${h}" rx="2" fill="${boja(cm)}"><title>${cm} cm: ${c} riba</title></rect>`;
+    if (cm % 5 === 0 || cm === od || cm === do_) {
+      g += `<text x="${x + sirina / 2}" y="${B + 26}" text-anchor="middle" style="font:600 18px Archivo,sans-serif;fill:#5d6b6e">${cm}</text>`;
+    }
+  }
+  g += `<line x1="${L}" x2="${R}" y1="${B}" y2="${B}" stroke="#ddd6c9" stroke-width="2"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Raspodjela dužina ulovljenih riba">${g}</svg>`;
+}
+
+/* Tri sesije kao tri trake: koliko je riba ulovljeno u svakoj. */
+function crtajSesije(poSesiji, bezRibe, ucesnika, brojKola) {
+  const max = Math.max(1, ...poSesiji);
+  return poSesiji.map((n, i) => {
+    const h = Math.round(100 * n / max);
+    const praznih = bezRibe[i];
+    const odUkupno = ucesnika * brojKola;
+    return `<div class="ses">
+      <div class="ses-traka"><div class="ses-punjenje" style="height:${h}%"></div></div>
+      <div class="ses-broj">${broj(n)}</div>
+      <div class="ses-ime">${i + 1}. sesija</div>
+      <div class="ses-prazno">${ikona('prazno')}${praznih}/${odUkupno}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderRijeke() {
+  const tereni = S.tereni || (S.tereni = profilTerena(S.sez));
+  if (!tereni.length) return;
+  if (!S.teren || !tereni.find(t => t.mjesto === S.teren)) S.teren = tereni[0].mjesto;
+  const t = tereni.find(x => x.mjesto === S.teren);
+
+  $('#rijeka-izbor').innerHTML = tereni.map(x =>
+    `<button type="button" class="round-btn${x.mjesto === S.teren ? ' is-active' : ''}" data-teren="${x.mjesto}">` +
+    `${ikona('talasi')}${x.mjesto.replace(/^Rijeka\s+/i, '')}</button>`).join('');
+
+  const kpi = (ime, v, k) => `<div class="kpi"><div class="kpi-k">${ikona(ime)}${k}</div><div class="kpi-v">${v}</div></div>`;
+  $('#rijeka-kpi').innerHTML =
+    kpi('kalendar', t.brojKola, t.brojKola === 1 ? 'kolo' : 'kola') +
+    kpi('fish', broj(t.ukupnoRiba), 'riba') +
+    kpi('ruler', dec(t.prosjek, 1) + ' cm', 'prosjek') +
+    kpi('trophy', t.najveca + ' cm', 'najveća') +
+    kpi('fish', t.dobitnaSesija, 'riba dobija sesiju') +
+    kpi('prazno', dec(100 * t.praznihUdio, 0) + '%', 'sesija bez ribe');
+
+  $('#rijeka-histogram').innerHTML = crtajHistogram(t.duzine);
+  $('#rijeka-raspodjela').innerHTML = t.raspodjela.map(r =>
+    `<div class="rasp"><span class="rasp-boja" style="background:${r.a >= 35 ? '#c8712a' : r.a >= 30 ? '#2f6b45' : r.a >= 25 ? '#0f4c53' : '#4d8f96'}"></span>` +
+    `<b>${dec(100 * r.udio, 0)}%</b><span>${r.a}-${r.b === 60 ? '48' : r.b} cm</span></div>`).join('');
+
+  $('#rijeka-sesije').innerHTML = crtajSesije(t.poSesiji, t.bezRibe, t.ucesnika, t.brojKola);
+
+  // pravilo bodovanja, pokazano brojkama a ne tekstom
+  $('#rijeka-bodovi').innerHTML =
+    `<div class="bod-red"><span class="bod-slika">${ikona('fish')}${ikona('fish')}</span>` +
+    `<span class="bod-tekst">2 × 20 cm</span><b class="bod-v">${broj(2 * poeniZaDuzinu(20))}</b></div>` +
+    `<div class="bod-vs">veće od</div>` +
+    `<div class="bod-red"><span class="bod-slika">${ikona('fish', 'velika')}</span>` +
+    `<span class="bod-tekst">1 × 40 cm</span><b class="bod-v">${broj(poeniZaDuzinu(40))}</b></div>`;
+
+  renderVrijeme(t);
+}
+
+/* ---------- vrijeme ----------
+   Open-Meteo, bez registracije i bez kljuca. Temperatura vode i vodostaj se
+   nigdje ne mogu besplatno povuci za crnogorske rijeke, pa ih ovdje nema.
+   Sve sto ne stigne se jednostavno ne iscrta; vrijeme je dodatak, ne uslov. */
+
+const KOORDINATE = [
+  [/ćehotina|cehotina|pljevlja/i, 43.356, 19.358],
+  [/tara.*kolašin|tara.*kolasin/i, 42.822, 19.517],
+  [/tara.*mojkovac/i, 42.960, 19.583],
+  [/lim.*berane/i, 42.844, 19.871],
+  [/lim.*plav|plavsko/i, 42.598, 19.944],
+];
+
+const koordinateZa = mjesto => {
+  const n = (KOORDINATE.find(([re]) => re.test(mjesto || '')) || null);
+  return n ? { lat: n[1], lon: n[2] } : null;
+};
+
+// "27. 09. 2026" -> "2026-09-27"
+function uISO(datum) {
+  const d = String(datum || '').match(/(\d{1,2})\D+(\d{1,2})\D+(\d{4})/);
+  if (!d) return null;
+  return `${d[3]}-${String(d[2]).padStart(2, '0')}-${String(d[1]).padStart(2, '0')}`;
+}
+
+async function vrijemeZa(mjesto, datum) {
+  const k = koordinateZa(mjesto), dan = uISO(datum);
+  if (!k || !dan) return null;
+  const kljucKesa = `vrijeme:${dan}:${k.lat},${k.lon}`;
+  try {
+    const kes = localStorage.getItem(kljucKesa);
+    if (kes) return JSON.parse(kes);
+  } catch (e) { /* privatni prozor, nema veze */ }
+
+  const url = 'https://archive-api.open-meteo.com/v1/archive'
+    + `?latitude=${k.lat}&longitude=${k.lon}&start_date=${dan}&end_date=${dan}`
+    + '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max'
+    + '&timezone=Europe%2FBelgrade';
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const d = j && j.daily;
+    if (!d || d.temperature_2m_max == null || d.temperature_2m_max[0] == null) return null;
+    const v = {
+      dan,
+      tmax: d.temperature_2m_max[0], tmin: d.temperature_2m_min[0],
+      kisa: d.precipitation_sum[0], vjetar: d.wind_speed_10m_max[0],
+    };
+    try { localStorage.setItem(kljucKesa, JSON.stringify(v)); } catch (e) { /* nema veze */ }
+    return v;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function renderVrijeme(t) {
+  const cilj = $('#rijeka-vrijeme');
+  if (!cilj) return;
+  const kola = S.sez.kola.filter(k => (k.mjesto || '') === t.mjesto);
+  const podaci = await Promise.all(kola.map(k => vrijemeZa(k.mjesto, k.datum)));
+  if (S.teren !== t.mjesto) return;          // u međuvremenu je promijenjena rijeka
+
+  const redovi = kola.map((k, i) => {
+    const v = podaci[i];
+    if (!v) return '';
+    return `<div class="vr-red">
+      <span class="vr-kolo">${RIMSKI[k.kolo] || k.kolo}</span>
+      <span class="vr-dan">${k.datum || ''}</span>
+      <span class="vr-p">${ikona('termometar')}${dec(v.tmin, 0)}–${dec(v.tmax, 0)}°</span>
+      <span class="vr-p">${ikona('kisa')}${dec(v.kisa, 1)} mm</span>
+      <span class="vr-p">${ikona('vjetar')}${dec(v.vjetar, 0)} km/h</span>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  cilj.innerHTML = redovi;
+  const sekcija = $('#rijeka-vrijeme-sekcija');
+  if (sekcija) sekcija.hidden = !redovi;
+}
+
 // koji prikaz se ponovo crta poslije klika na zaglavlje tabele
 const PRIKAZI = { rang: renderRang, ekipno: renderEkipno, kola: renderKola,
   stat: renderTabelaStat, statKlub: renderTabelaKlub, prognoza: renderPrognoza };
@@ -1505,6 +1775,7 @@ function prikaziTab(id) {
   if (id === 'kola') renderKola();
   if (id === 'stat') renderStat();
   if (id === 'prognoza') renderPrognoza();
+  if (id === 'rijeke') renderRijeke();
   if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
 }
 
@@ -1611,6 +1882,9 @@ if (typeof document !== 'undefined') {
   });
 
   document.addEventListener('click', e => {
+    const rijeka = e.target.closest('#rijeka-izbor button');
+    if (rijeka) { S.teren = rijeka.dataset.teren; renderRijeke(); return; }
+
     const dugme = e.target.closest('#prog-kontrole button');
     if (dugme) {
       if (dugme.dataset.preostalo) S.preostalo = Number(dugme.dataset.preostalo);
@@ -1676,7 +1950,7 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne,
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO,
     prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, licnaTrka, granicaProtiv, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }
