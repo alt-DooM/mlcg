@@ -501,6 +501,8 @@ for (const t of tereni) {
   for (const x of sv) {
     assert.ok(x.ik && x.broj !== undefined && x.tekst, `${t.mjesto}: savjet bez ikone, broja ili teksta`);
     assert.ok(!/undefined|NaN/.test(String(x.broj) + x.tekst), `${t.mjesto}: savjet sadrzi NaN ili undefined`);
+    // svaki savjet mora da zna u koju sekciju ide, inace se nigdje ne iscrta
+    assert.ok(['duzine', 'sesije', 'bodovi'].includes(x.gdje), `${t.mjesto}: savjet '${x.tekst}' nema sekciju`);
   }
   // savjet o padu kroz dan mora da se slaze sa stvarnim brojem riba
   const pad = sv.find(x => /prvoj|trećoj|ujednačen/.test(x.tekst));

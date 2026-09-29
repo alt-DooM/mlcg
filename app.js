@@ -482,9 +482,9 @@ function savjetiZaTeren(t, tereni) {
   // kako rijeka radi kroz dan
   if (s1 && s3) {
     const odnos = s1 / s3;
-    if (odnos >= 1.4) s.push({ ik: 'trend', broj: dec(odnos, 1) + '×', tekst: 'više ribe u prvoj nego u trećoj sesiji' });
-    else if (odnos <= 1 / 1.4) s.push({ ik: 'trend', broj: dec(1 / odnos, 1) + '×', tekst: 'više ribe u trećoj nego u prvoj sesiji' });
-    else s.push({ ik: 'talasi', broj: '≈', tekst: 'ulov ujednačen kroz cijeli dan' });
+    if (odnos >= 1.4) s.push({ gdje: 'sesije', ik: 'trend', broj: dec(odnos, 1) + '×', tekst: 'više ribe u prvoj nego u trećoj sesiji' });
+    else if (odnos <= 1 / 1.4) s.push({ gdje: 'sesije', ik: 'trend', broj: dec(1 / odnos, 1) + '×', tekst: 'više ribe u trećoj nego u prvoj sesiji' });
+    else s.push({ gdje: 'sesije', ik: 'talasi', broj: '≈', tekst: 'ulov ujednačen kroz cijeli dan' });
   }
 
   // veličina ribe u odnosu na ostale terene
@@ -493,14 +493,14 @@ function savjetiZaTeren(t, tereni) {
   const razlika = t.prosjek - ligaProsjek;
   if (Math.abs(razlika) >= 1) {
     s.push({
-      ik: 'ruler', broj: (razlika > 0 ? '+' : '') + dec(razlika, 1) + ' cm',
+      gdje: 'duzine', ik: 'ruler', broj: (razlika > 0 ? '+' : '') + dec(razlika, 1) + ' cm',
       tekst: razlika > 0 ? 'krupnija riba nego na ostalim terenima' : 'sitnija riba nego na ostalim terenima',
     });
   }
 
   // koliko riba je dobijalo sesiju
   if (t.dobitnaSesija) {
-    s.push({ ik: 'trophy', broj: t.dobitnaSesija, tekst: 'riba je u prosjeku dobijalo sesiju' });
+    s.push({ gdje: 'bodovi', ik: 'trophy', broj: t.dobitnaSesija, tekst: 'riba je u prosjeku dobijalo sesiju' });
   }
 
   // gdje je najveći rizik da se ostane prazan
@@ -508,7 +508,7 @@ function savjetiZaTeren(t, tereni) {
   const odUkupno = t.ucesnika * t.brojKola;
   if (odUkupno && t.bezRibe[najgora] / odUkupno >= 0.2) {
     s.push({
-      ik: 'prazno', broj: t.bezRibe[najgora] + '/' + odUkupno,
+      gdje: 'sesije', ik: 'prazno', broj: t.bezRibe[najgora] + '/' + odUkupno,
       tekst: `praznih u ${najgora + 1}. sesiji, tu se najviše gubi`,
     });
   }
@@ -516,13 +516,13 @@ function savjetiZaTeren(t, tereni) {
   // ima li smisla čekati kapitalca
   const krupne = t.raspodjela[t.raspodjela.length - 1].udio;
   s.push({
-    ik: 'fish', broj: dec(100 * krupne, 0) + '%',
+    gdje: 'duzine', ik: 'fish', broj: dec(100 * krupne, 0) + '%',
     tekst: krupne < 0.03
       ? 'ulova preko 35 cm, kapitalac se praktično ne javlja'
       : 'ulova preko 35 cm',
   });
 
-  return s.slice(0, 5);
+  return s;
 }
 
 /* ---------- statistika sezone ---------- */
@@ -1714,12 +1714,10 @@ function renderRijeke() {
 
   const kpi = (ime, v, k) => `<div class="kpi"><div class="kpi-k">${ikona(ime)}${k}</div><div class="kpi-v">${v}</div></div>`;
   $('#rijeka-kpi').innerHTML =
-    kpi('kalendar', t.brojKola, t.brojKola === 1 ? 'kolo' : 'kola') +
-    kpi('fish', broj(t.ukupnoRiba), 'riba') +
-    kpi('ruler', dec(t.prosjek, 1) + ' cm', 'prosjek') +
-    kpi('trophy', t.najveca + ' cm', 'najveća') +
-    kpi('fish', t.dobitnaSesija, 'riba dobija sesiju') +
-    kpi('prazno', dec(100 * t.praznihUdio, 0) + '%', 'sesija bez ribe');
+    kpi('kalendar', t.brojKola, t.brojKola === 1 ? 'odigrano kolo' : 'odigranih kola') +
+    kpi('fish', broj(t.ukupnoRiba), 'ulovljenih riba') +
+    kpi('ruler', dec(t.prosjek, 1) + ' cm', 'prosječna dužina') +
+    kpi('trophy', t.najveca + ' cm', 'najveća ulovljena');
 
   $('#rijeka-histogram').innerHTML = crtajHistogram(t.duzine);
   $('#rijeka-raspodjela').innerHTML = t.raspodjela.map(r =>
@@ -1736,8 +1734,13 @@ function renderRijeke() {
     `<div class="bod-red"><span class="bod-slika">${ikona('fish', 'velika')}</span>` +
     `<span class="bod-tekst">1 × 40 cm</span><b class="bod-v">${broj(poeniZaDuzinu(40))}</b></div>`;
 
-  $('#rijeka-savjeti').innerHTML = savjetiZaTeren(t, tereni).map(x =>
-    `<div class="savjet">${ikona(x.ik)}<b>${x.broj}</b><span>${x.tekst}</span></div>`).join('');
+  const sv = savjetiZaTeren(t, tereni);
+  for (const gdje of ['duzine', 'sesije', 'bodovi']) {
+    const cilj = $('#savjeti-' + gdje);
+    if (!cilj) continue;
+    cilj.innerHTML = sv.filter(x => x.gdje === gdje).map(x =>
+      `<div class="savjet">${ikona(x.ik)}<b>${x.broj}</b><span>${x.tekst}</span></div>`).join('');
+  }
 
   renderVrijeme(t);
 }
