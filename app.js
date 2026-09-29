@@ -659,6 +659,98 @@ function statistika(sez) {
   return { ukupno, perTakmicar, perKlub, rekordi: { najSesija, najPoenaSesija, najDuza, najRiba, konstantan, skok } };
 }
 
+/* ---------- rekordi sezone ----------
+
+   Knjiga rekorda. Sve se racuna iz odigranih kola, nista se ne unosi rucno.
+   Sest kartica je ranije stajalo u statistici; ovdje su zajedno sa ostalima.  */
+
+const MIN_RIBA_ZA_PROSJEK = 20;    // ispod ovoga prosjek duzine nije rekord nego slucajnost
+
+function rekordiSezone(sez, stat) {
+  const kola = sez.kola;
+  const mjestoKola = new Map(kola.map(k => [k.kolo, k.mjesto || '']));
+  const rim = n => (RIMSKI[n] || n) + ' kolo';
+  const rimSa = (n, nastavak) => (RIMSKI[n] || n) + ' kol' + nastavak;
+  // 2, 3 i 4 traze drugi oblik: 23 ribe, ali 25 riba i 13 riba
+  const malo = n => n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 11 || n % 100 > 14);
+  const ribe = n => n + (malo(n) ? ' ribe' : ' riba');
+  const plasmana = n => n + (malo(n) ? ' sektorska' : ' sektorskih') + ' plasmana';
+  const gdje = n => rim(n) + (mjestoKola.get(n) ? ', ' + mjestoKola.get(n) : '');
+
+  const poKolu = [];            // ucinak jednog takmicara u jednom kolu
+  const niz = new Map();        // kljuc -> tekuci i najduzi niz sesija sa ribom
+  const duzine = new Map();     // kljuc -> sve duzine sezone
+  const poTerenu = new Map();   // mjesto -> najduza riba tog terena
+
+  for (const kolo of kola) {
+    // propusteno kolo prekida niz, isto kao i sesija bez ribe
+    for (const [k, n] of niz) if (!kolo.rezultati.has(k)) n.tekuci = 0;
+
+    for (const r of kolo.rezultati.values()) {
+      poKolu.push({ ime: r.ime, kolo: kolo.kolo, riba: zbir(r.riba), poena: r.poena, plasman: r.plasman });
+
+      if (!niz.has(r.kljuc)) niz.set(r.kljuc, { ime: r.ime, tekuci: 0, najduzi: 0, kraj: null });
+      const n = niz.get(r.kljuc);
+      n.ime = r.ime;
+      for (let s = 0; s < 3; s++) {
+        if ((r.riba[s] || 0) > 0) {
+          n.tekuci++;
+          if (n.tekuci > n.najduzi) { n.najduzi = n.tekuci; n.kraj = { kolo: kolo.kolo, sesija: s + 1 }; }
+        } else {
+          n.tekuci = 0;
+        }
+      }
+
+      const d = (r.duzine || []).reduce((a, x) => a.concat(x || []), []);
+      if (d.length) {
+        if (!duzine.has(r.kljuc)) duzine.set(r.kljuc, { ime: r.ime, sve: [] });
+        duzine.get(r.kljuc).sve.push(...d);
+      }
+
+      const naj = Math.max(0, ...(r.najduza || []));
+      const m = kolo.mjesto || 'Nepoznato mjesto';
+      if (naj && (!poTerenu.has(m) || naj > poTerenu.get(m).cm)) {
+        poTerenu.set(m, { mjesto: m, cm: naj, ime: r.ime, kolo: kolo.kolo });
+      }
+    }
+  }
+
+  const najRibaKolo = poKolu.slice().sort((a, b) => (b.riba - a.riba) || (b.poena - a.poena))[0] || null;
+  const najKolo = poKolu.slice().sort(poredak)[0] || null;
+  const najNiz = [...niz.values()].sort((a, b) => b.najduzi - a.najduzi)[0] || null;
+  const najKrupniji = [...duzine.values()]
+    .filter(x => x.sve.length >= MIN_RIBA_ZA_PROSJEK)
+    .map(x => ({ ime: x.ime, riba: x.sve.length, prosjek: zbir(x.sve) / x.sve.length }))
+    .sort((a, b) => b.prosjek - a.prosjek)[0] || null;
+
+  const r = (stat && stat.rekordi) || {};
+  const karte = [];
+  const dodaj = (ik, k, v, d) => { if (v) karte.push({ ik, k, v, d }); };
+
+  if (r.najDuza && r.najDuza.najduza) dodaj('ruler', 'Najduža riba sezone', r.najDuza.ime,
+    `${r.najDuza.najduza} cm, ${gdje(r.najDuza.kolo)}, ${r.najDuza.sesija}. sesija`);
+  if (najKolo) dodaj('trophy', 'Najbolje odigrano kolo', najKolo.ime,
+    `${plasmana(najKolo.plasman)}, ${gdje(najKolo.kolo)}`);
+  if (r.najSesija) dodaj('fish', 'Najviše riba u jednoj sesiji', r.najSesija.ime,
+    `${ribe(r.najSesija.riba)}, ${gdje(r.najSesija.kolo)}, ${r.najSesija.sesija}. sesija`);
+  if (r.najPoenaSesija) dodaj('trophy', 'Najviše poena u jednoj sesiji', r.najPoenaSesija.ime,
+    `${broj(r.najPoenaSesija.poena)} poena, ${gdje(r.najPoenaSesija.kolo)}, ${r.najPoenaSesija.sesija}. sesija`);
+  if (najRibaKolo) dodaj('fish', 'Najviše riba u jednom kolu', najRibaKolo.ime,
+    `${ribe(najRibaKolo.riba)} u tri sesije, ${gdje(najRibaKolo.kolo)}`);
+  if (r.najRiba) dodaj('fish', 'Najviše riba u sezoni', r.najRiba.ime,
+    `${ribe(r.najRiba.riba)} u ${r.najRiba.sesija} sesija, ${dec(r.najRiba.prosjekRiba, 2)} po sesiji`);
+  if (najNiz && najNiz.najduzi > 1) dodaj('trend', 'Najduži niz sesija sa ribom', najNiz.ime,
+    `${najNiz.najduzi} sesija zaredom, zaključno sa ${najNiz.kraj.sesija}. sesijom u ${rimSa(najNiz.kraj.kolo, 'u')}`);
+  if (najKrupniji) dodaj('ruler', 'Najkrupnija riba u prosjeku', najKrupniji.ime,
+    `${dec(najKrupniji.prosjek, 1)} cm u prosjeku, na ${najKrupniji.riba} riba`);
+  if (r.konstantan) dodaj('talasi', 'Najkonstantniji takmičar', r.konstantan.ime,
+    `Plasman od ${r.konstantan.najbolje} do ${r.konstantan.najgore} u svim kolima`);
+  if (r.skok) dodaj('trend', 'Najveći skok na tabeli', r.skok.ime,
+    `Sa ${r.skok.sa}. na ${r.skok.na}. mjesto poslije ${rimSa(r.skok.kolo, 'a')}`);
+
+  return { karte, tereni: [...poTerenu.values()].sort((a, b) => b.cm - a.cm) };
+}
+
 /* ---------- prognoza: kalkulator titule i vjerovatnoće ----------
 
    Kalkulator je običan račun, ne pogađanje: uneseš pretpostavku i dobiješ
@@ -964,6 +1056,7 @@ const S = {
   matricaCtx: null,
   licni: null,
   tereni: null,
+  rekordi: null,
   teren: null,
   sljedece: null,
   sort: {},          // {idTabele: {key, dir}}
@@ -1327,24 +1420,6 @@ function renderStat() {
   $('#stat-chart').innerHTML = crtajLinije(izabrane, maxRank);
   $('#stat-legend').innerHTML = izabrane.map((s, i) =>
     `<span><i style="background:${BOJE[i % BOJE.length]}"></i>${s.ime}</span>`).join('');
-
-  // rekordi
-  const r = S.stat.rekordi;
-  const karta = (k, v, d) => `<div class="stat-card"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
-  let rek = '';
-  if (r.najSesija) rek += karta('Najbolja sesija sezone', r.najSesija.ime,
-    `${RIMSKI[r.najSesija.kolo] || r.najSesija.kolo} kolo, sesija ${r.najSesija.sesija}, ${r.najSesija.riba} riba (${broj(r.najSesija.poena)} poena)`);
-  if (r.najPoenaSesija) rek += karta('Najviše poena u jednoj sesiji', r.najPoenaSesija.ime,
-    `${RIMSKI[r.najPoenaSesija.kolo] || r.najPoenaSesija.kolo} kolo, sesija ${r.najPoenaSesija.sesija}, ${broj(r.najPoenaSesija.poena)} poena`);
-  if (r.najRiba) rek += karta('Najviše riba u sezoni', r.najRiba.ime,
-    `${r.najRiba.riba} riba u ${r.najRiba.sesija} sesija (${dec(r.najRiba.prosjekRiba, 2)} po sesiji)`);
-  if (r.najDuza && r.najDuza.najduza) rek += karta('Najduža riba sezone', r.najDuza.ime,
-    `${r.najDuza.najduza} cm, ${RIMSKI[r.najDuza.kolo] || r.najDuza.kolo} kolo, sesija ${r.najDuza.sesija}`);
-  if (r.konstantan) rek += karta('Najkonstantniji takmičar', r.konstantan.ime,
-    `Plasman od ${r.konstantan.najbolje} do ${r.konstantan.najgore} u svim kolima`);
-  if (r.skok) rek += karta('Najveći skok na tabeli', r.skok.ime,
-    `Sa ${r.skok.sa}. na ${r.skok.na}. mjesto poslije ${RIMSKI[r.skok.kolo] || r.skok.kolo} kola`);
-  $('#stat-cards').innerHTML = rek;
 
   // klubovi
   $('#klub-poeni').innerHTML = crtajTrake(
@@ -1753,6 +1828,17 @@ function renderRijeke() {
   renderVrijeme(t);
 }
 
+function renderRekordi() {
+  const rk = S.rekordi || (S.rekordi = rekordiSezone(S.sez, S.stat));
+  $('#rekordi-cards').innerHTML = rk.karte.map(c =>
+    `<div class="stat-card"><div class="k">${ikona(c.ik)}${c.k}</div>` +
+    `<div class="v">${c.v}</div><div class="d">${c.d}</div></div>`).join('');
+  $('#rekordi-tereni').innerHTML = rk.tereni.map(t =>
+    `<div class="kpi"><div class="kpi-k">${ikona('talasi')}${t.mjesto.replace(/^Rijeka\s+/i, '')}</div>` +
+    `<div class="kpi-v">${t.cm} cm</div>` +
+    `<div class="kpi-d">${t.ime}, ${RIMSKI[t.kolo] || t.kolo} kolo</div></div>`).join('');
+}
+
 /* ---------- vrijeme ----------
    Open-Meteo, bez registracije i bez kljuca. Temperatura vode i vodostaj se
    nigdje ne mogu besplatno povuci za crnogorske rijeke, pa ih ovdje nema.
@@ -1915,6 +2001,7 @@ function prikaziTab(id) {
   if (id === 'stat') renderStat();
   if (id === 'prognoza') renderPrognoza();
   if (id === 'rijeke') renderRijeke();
+  if (id === 'rekordi') renderRekordi();
   if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
 }
 
@@ -1926,6 +2013,8 @@ function renderSve() {
   S.round = S.sez.kola.length - 1;
   S.preostalo = Math.max(1, UKUPNO_KOLA - S.sez.kola.length);
   S.prognoza = null;
+  S.tereni = null;
+  S.rekordi = null;
 
   $('#hero-godina').textContent = zadnje.godina || '';
   $('#hero-badge').textContent =
@@ -2100,7 +2189,7 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren,
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren, rekordiSezone,
     prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, licnaTrka, granicaProtiv, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }

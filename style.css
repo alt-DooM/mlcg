@@ -459,3 +459,9 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 .savjet .ik{width:22px;height:22px;color:var(--accent)}
 .savjet b{font:700 clamp(19px,3.4vw,23px)/1 Archivo,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 .savjet span{font:500 14px/1.35 Archivo,sans-serif;color:var(--muted)}
+
+#rekordi-cards .k{display:flex;align-items:center;gap:7px}
+#rekordi-cards .k .ik{width:15px;height:15px;flex:0 0 auto}
+#rekordi-tereni .kpi-k{display:flex;align-items:center;gap:7px;text-transform:none;letter-spacing:.02em;font-size:13px}
+#rekordi-tereni .kpi-k .ik{width:16px;height:16px;color:var(--accent)}
+.kpi-d{font:500 14px/1.4 Archivo,sans-serif;color:var(--muted);margin-top:6px}

@@ -15,7 +15,7 @@ const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
         staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka,
-        profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren } = require('./app.js');
+        profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren, rekordiSezone } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4, 5].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -527,5 +527,51 @@ console.log(`  OK  savjeti: ${tereni.length} terena, svaki sa svojim brojkama`);
 console.log(`  OK  karton rijeke: ${ribaUkupno} riba, ${tereni.length} terena, bodovanje 20/cm + 100`);
 
 console.log(`  OK  prognoza: kalkulator tacan, granice tacne, simulacija ponovljiva (${preostalo} preostala kola, ${zivi.length} jos u igri)`);
+
+/* --- 9. rekordi sezone ---
+   Rekord se provjerava iz drugog ugla nego sto se racuna: najduza riba preko
+   kartona rijeke, najbolje kolo direktno iz rezultata kola.                   */
+
+const rek = rekordiSezone(sez, st);
+
+for (const c of rek.karte) {
+  for (const polje of [c.k, c.v, c.d]) {
+    assert.ok(polje && !/undefined|NaN|Infinity/.test(polje), `rekord "${c.k}": prazno ili nevalidno polje (${polje})`);
+  }
+}
+assert.ok(rek.karte.length >= 8, `ocekivano najmanje 8 rekorda, dobijeno ${rek.karte.length}`);
+
+// najduza riba sezone mora biti ista kao najveca iz kartona rijeka
+const najucm = Math.max(...tereni.map(t => t.najveca));
+const kartaDuza = rek.karte.find(c => c.k.includes('Najduža riba sezone'));
+assert.ok(kartaDuza && kartaDuza.d.startsWith(najucm + ' cm'),
+  `najduza riba sezone mora biti ${najucm} cm, karta kaze "${kartaDuza && kartaDuza.d}"`);
+
+// rekord po terenu mora biti isti kao najveca riba tog terena
+assert.strictEqual(rek.tereni.length, tereni.length, 'rekord po terenu za svaki teren');
+for (const t of rek.tereni) {
+  const karton = tereni.find(x => x.mjesto === t.mjesto);
+  assert.ok(karton, `teren '${t.mjesto}' nije u kartonu rijeka`);
+  assert.strictEqual(t.cm, karton.najveca, `${t.mjesto}: rekordna riba se ne slaze sa kartonom`);
+}
+
+// najbolje odigrano kolo: najmanji zbir sektorskih u bilo kom pojedinacnom kolu
+let najboljeKolo = Infinity;
+for (const kolo of sez.kola) {
+  for (const r of kolo.rezultati.values()) najboljeKolo = Math.min(najboljeKolo, r.plasman);
+}
+const kartaKolo = rek.karte.find(c => c.k.includes('Najbolje odigrano kolo'));
+assert.ok(kartaKolo && kartaKolo.d.startsWith(najboljeKolo + ' sektorsk'),
+  `najbolje kolo mora biti ${najboljeKolo} sektorskih, karta kaze "${kartaKolo && kartaKolo.d}"`);
+
+// niz sesija sa ribom ne moze biti duzi od broja odigranih sesija
+const kartaNiz = rek.karte.find(c => c.k.includes('niz sesija sa ribom'));
+if (kartaNiz) {
+  const duzinaNiza = parseInt(kartaNiz.d, 10);
+  assert.ok(duzinaNiza > 1 && duzinaNiza <= sez.kola.length * 3,
+    `niz od ${duzinaNiza} sesija je nemoguc u ${sez.kola.length * 3} odigranih`);
+}
+
+console.log(`  OK  rekordi: ${rek.karte.length} kartica, najduza ${najucm} cm, najbolje kolo ${najboljeKolo}`);
 
 console.log(`\nSve provjere prošle (${ok} redova protiv Python izlaza, ${poredjeno} protiv dokumenta saveza).`);
