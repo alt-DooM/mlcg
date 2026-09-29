@@ -424,7 +424,7 @@ function profilTerena(sez) {
     if (!po.has(mjesto)) {
       po.set(mjesto, {
         mjesto, kola: [], datumi: [], duzine: [], poSesiji: [0, 0, 0],
-        bezRibe: [0, 0, 0], ucesnika: 0, dobitne: [],
+        bezRibe: [0, 0, 0], ucesnika: 0, dobitne: [], dobitniPoeni: [],
       });
     }
     const t = po.get(mjesto);
@@ -448,7 +448,7 @@ function profilTerena(sez) {
         const bod = d.reduce((a, cm) => a + poeniZaDuzinu(cm), 0);
         if (bod > 0 && (!naj || bod > naj.bod)) naj = { bod, riba: d.length };
       }
-      if (naj) t.dobitne.push(naj.riba);
+      if (naj) { t.dobitne.push(naj.riba); t.dobitniPoeni.push(naj.bod); }
     }
   }
 
@@ -466,10 +466,63 @@ function profilTerena(sez) {
         broj: t.duzine.filter(x => x >= a && x <= b).length,
       })),
       dobitnaSesija: Math.round(medijana(t.dobitne)),
+      dobitniPoeni: Math.round(medijana(t.dobitniPoeni)),
       // koliko sesija od ukupno je zavrsilo bez ijedne ribe
       praznihUdio: (t.bezRibe[0] + t.bezRibe[1] + t.bezRibe[2]) / (t.ucesnika * 3 * t.kola.length || 1),
     };
   }).sort((a, b) => b.ukupnoRiba - a.ukupnoRiba);
+}
+
+/* Kratki savjeti, svaki izveden iz brojki ovog terena. Namjerno se ne pise
+   nista sto podaci ne nose: nema savjeta o musicama, dubini ni tehnici. */
+function savjetiZaTeren(t, tereni) {
+  const s = [];
+  const [s1, s2, s3] = t.poSesiji;
+
+  // kako rijeka radi kroz dan
+  if (s1 && s3) {
+    const odnos = s1 / s3;
+    if (odnos >= 1.4) s.push({ ik: 'trend', broj: dec(odnos, 1) + '×', tekst: 'više ribe u prvoj nego u trećoj sesiji' });
+    else if (odnos <= 1 / 1.4) s.push({ ik: 'trend', broj: dec(1 / odnos, 1) + '×', tekst: 'više ribe u trećoj nego u prvoj sesiji' });
+    else s.push({ ik: 'talasi', broj: '≈', tekst: 'ulov ujednačen kroz cijeli dan' });
+  }
+
+  // veličina ribe u odnosu na ostale terene
+  const sveDuzine = tereni.flatMap(x => x.duzine);
+  const ligaProsjek = sveDuzine.reduce((a, b) => a + b, 0) / (sveDuzine.length || 1);
+  const razlika = t.prosjek - ligaProsjek;
+  if (Math.abs(razlika) >= 1) {
+    s.push({
+      ik: 'ruler', broj: (razlika > 0 ? '+' : '') + dec(razlika, 1) + ' cm',
+      tekst: razlika > 0 ? 'krupnija riba nego na ostalim terenima' : 'sitnija riba nego na ostalim terenima',
+    });
+  }
+
+  // koliko riba je dobijalo sesiju
+  if (t.dobitnaSesija) {
+    s.push({ ik: 'trophy', broj: t.dobitnaSesija, tekst: 'riba je u prosjeku dobijalo sesiju' });
+  }
+
+  // gdje je najveći rizik da se ostane prazan
+  const najgora = t.bezRibe.indexOf(Math.max(...t.bezRibe));
+  const odUkupno = t.ucesnika * t.brojKola;
+  if (odUkupno && t.bezRibe[najgora] / odUkupno >= 0.2) {
+    s.push({
+      ik: 'prazno', broj: t.bezRibe[najgora] + '/' + odUkupno,
+      tekst: `praznih u ${najgora + 1}. sesiji, tu se najviše gubi`,
+    });
+  }
+
+  // ima li smisla čekati kapitalca
+  const krupne = t.raspodjela[t.raspodjela.length - 1].udio;
+  s.push({
+    ik: 'fish', broj: dec(100 * krupne, 0) + '%',
+    tekst: krupne < 0.03
+      ? 'ulova preko 35 cm, kapitalac se praktično ne javlja'
+      : 'ulova preko 35 cm',
+  });
+
+  return s.slice(0, 5);
 }
 
 /* ---------- statistika sezone ---------- */
@@ -1683,6 +1736,9 @@ function renderRijeke() {
     `<div class="bod-red"><span class="bod-slika">${ikona('fish', 'velika')}</span>` +
     `<span class="bod-tekst">1 × 40 cm</span><b class="bod-v">${broj(poeniZaDuzinu(40))}</b></div>`;
 
+  $('#rijeka-savjeti').innerHTML = savjetiZaTeren(t, tereni).map(x =>
+    `<div class="savjet">${ikona(x.ik)}<b>${x.broj}</b><span>${x.tekst}</span></div>`).join('');
+
   renderVrijeme(t);
 }
 
@@ -2033,7 +2089,7 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI,
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren,
     prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, licnaTrka, granicaProtiv, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }

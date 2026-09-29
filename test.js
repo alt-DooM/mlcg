@@ -15,7 +15,7 @@ const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
         staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka,
-        profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI } = require('./app.js');
+        profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI, savjetiZaTeren } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4, 5].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -493,6 +493,27 @@ assert.ok(tereni.find(t => t.mjesto === SK.referenca), 'referentni teren postoji
 assert.strictEqual(DANI[new Date(isoSK + 'T00:00:00').getDay()], 'nedjelja', '11. oktobar 2026. je nedjelja');
 assert.ok(new Date(isoSK) > new Date(uISO(sez.kola[sez.kola.length - 1].datum)), 'sljedece kolo je poslije posljednjeg odigranog');
 console.log(`  OK  sljedece kolo: ${SK.mjesto}, ${SK.datum}, referenca ${SK.referenca}`);
+
+// savjeti: izvedeni iz brojki, pa moraju da prate brojke
+for (const t of tereni) {
+  const sv = savjetiZaTeren(t, tereni);
+  assert.ok(sv.length >= 3 && sv.length <= 5, `${t.mjesto}: ocekivano 3 do 5 savjeta, dobijeno ${sv.length}`);
+  for (const x of sv) {
+    assert.ok(x.ik && x.broj !== undefined && x.tekst, `${t.mjesto}: savjet bez ikone, broja ili teksta`);
+    assert.ok(!/undefined|NaN/.test(String(x.broj) + x.tekst), `${t.mjesto}: savjet sadrzi NaN ili undefined`);
+  }
+  // savjet o padu kroz dan mora da se slaze sa stvarnim brojem riba
+  const pad = sv.find(x => /prvoj|trećoj|ujednačen/.test(x.tekst));
+  assert.ok(pad, `${t.mjesto}: nema savjeta o kretanju ulova kroz dan`);
+  const [a, , c] = t.poSesiji;
+  if (/prvoj nego u trećoj/.test(pad.tekst)) assert.ok(a > c, `${t.mjesto}: savjet kaze pad, a brojevi ne`);
+  if (/trećoj nego u prvoj/.test(pad.tekst)) assert.ok(c > a, `${t.mjesto}: savjet kaze rast, a brojevi ne`);
+}
+// Lim je najizrazitiji pad kroz dan i najsitnija riba
+const savjetiLim = savjetiZaTeren(lim, tereni);
+assert.ok(savjetiLim.some(x => /sitnija/.test(x.tekst)), 'Lim mora nositi savjet o sitnijoj ribi');
+assert.ok(savjetiLim.some(x => /kapitalac/.test(x.tekst)), 'Lim mora nositi savjet o izostanku kapitalca');
+console.log(`  OK  savjeti: ${tereni.length} terena, svaki sa svojim brojkama`);
 
 console.log(`  OK  karton rijeke: ${ribaUkupno} riba, ${tereni.length} terena, bodovanje 20/cm + 100`);
 
