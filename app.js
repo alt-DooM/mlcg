@@ -912,6 +912,7 @@ const S = {
   licni: null,
   tereni: null,
   teren: null,
+  sljedece: null,
   sort: {},          // {idTabele: {key, dir}}
 };
 
@@ -1645,9 +1646,13 @@ function crtajSesije(poSesiji, bezRibe, ucesnika, brojKola) {
 }
 
 function renderRijeke() {
+  renderSljedece();
   const tereni = S.tereni || (S.tereni = profilTerena(S.sez));
   if (!tereni.length) return;
-  if (!S.teren || !tereni.find(t => t.mjesto === S.teren)) S.teren = tereni[0].mjesto;
+  if (!S.teren || !tereni.find(t => t.mjesto === S.teren)) {
+    const ref = S.sljedece && S.sljedece.referenca;
+    S.teren = (ref && tereni.find(t => t.mjesto === ref) ? ref : tereni[0].mjesto);
+  }
   const t = tereni.find(x => x.mjesto === S.teren);
 
   $('#rijeka-izbor').innerHTML = tereni.map(x =>
@@ -1737,6 +1742,73 @@ async function vrijemeZa(mjesto, datum) {
   }
 }
 
+/* Prognoza za buduci dan. Drugi endpoint od arhive, i kes traje samo tri sata
+   jer se prognoza mijenja. Dalje od 16 dana Open-Meteo ne daje nista. */
+async function prognozaVremena(mjesto, datum) {
+  const k = koordinateZa(mjesto), dan = uISO(datum);
+  if (!k || !dan) return null;
+  const kljucKesa = `prognoza:${dan}:${k.lat},${k.lon}`;
+  try {
+    const kes = JSON.parse(localStorage.getItem(kljucKesa) || 'null');
+    if (kes && Date.now() - kes.kad < 3 * 3600e3) return kes.v;
+  } catch (e) { /* nema veze */ }
+
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${k.lat}&longitude=${k.lon}&start_date=${dan}&end_date=${dan}`
+    + '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,precipitation_probability_max'
+    + '&timezone=Europe%2FBelgrade';
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const d = j && j.daily;
+    if (!d || !d.temperature_2m_max || d.temperature_2m_max[0] == null) return null;
+    const v = {
+      dan, tmax: d.temperature_2m_max[0], tmin: d.temperature_2m_min[0],
+      kisa: d.precipitation_sum[0], vjetar: d.wind_speed_10m_max[0],
+      sansaKise: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
+    };
+    try { localStorage.setItem(kljucKesa, JSON.stringify({ kad: Date.now(), v })); } catch (e) { /* nema veze */ }
+    return v;
+  } catch (e) {
+    return null;
+  }
+}
+
+const DANI = ['nedjelja', 'ponedjeljak', 'utorak', 'srijeda', 'četvrtak', 'petak', 'subota'];
+
+async function renderSljedece() {
+  const cilj = $('#sljedece-kolo');
+  const sk = S.sljedece;
+  if (!cilj) return;
+  if (!sk || !sk.datum) { cilj.hidden = true; return; }
+
+  const iso = uISO(sk.datum);
+  const dat = iso ? new Date(iso + 'T00:00:00') : null;
+  const danas = new Date(); danas.setHours(0, 0, 0, 0);
+  const zaDana = dat ? Math.round((dat - danas) / 86400e3) : null;
+  const odbrojavanje = zaDana == null ? ''
+    : zaDana > 1 ? `za ${zaDana} dana` : zaDana === 1 ? 'sjutra' : zaDana === 0 ? 'danas' : '';
+
+  cilj.hidden = false;
+  cilj.innerHTML =
+    `<div class="sk-glava">
+       <span class="sk-oznaka">${ikona('kalendar')}${RIMSKI[sk.kolo] || sk.kolo} kolo</span>
+       <span class="sk-mjesto">${ikona('pin')}${(sk.mjesto || '').replace(/^Rijeka\s+/i, '')}</span>
+       <span class="sk-datum">${dat ? DANI[dat.getDay()] + ', ' : ''}${sk.datum}${odbrojavanje ? ' · ' + odbrojavanje : ''}</span>
+     </div>
+     <div class="sk-vrijeme" id="sk-vrijeme"></div>`;
+
+  const v = await prognozaVremena(sk.mjesto, sk.datum);
+  const p = $('#sk-vrijeme');
+  if (!p) return;
+  p.innerHTML = v ? (
+    `<span class="vr-p">${ikona('termometar')}${dec(v.tmin, 0)}–${dec(v.tmax, 0)}°</span>` +
+    `<span class="vr-p">${ikona('kisa')}${dec(v.kisa, 1)} mm${v.sansaKise != null ? ' · ' + dec(v.sansaKise, 0) + '%' : ''}</span>` +
+    `<span class="vr-p">${ikona('vjetar')}${dec(v.vjetar, 0)} km/h</span>`
+  ) : `<span class="sk-nema">${ikona('prazno')}prognoza još nije dostupna</span>`;
+}
+
 async function renderVrijeme(t) {
   const cilj = $('#rijeka-vrijeme');
   if (!cilj) return;
@@ -1791,6 +1863,14 @@ function renderSve() {
   $('#hero-godina').textContent = zadnje.godina || '';
   $('#hero-badge').textContent =
     `Nakon ${RIMSKI[zadnje.kolo] || zadnje.kolo} kola: ${zadnje.mjesto || 'nepoznato mjesto'}`;
+  const sk = S.sljedece;
+  const hs = $('#hero-sljedece');
+  if (hs) {
+    const jos = sk && sk.datum && !S.kola.some(k => k.kolo === sk.kolo);
+    hs.hidden = !jos;
+    if (jos) hs.textContent = `Sljedeće: ${RIMSKI[sk.kolo] || sk.kolo} kolo, ` +
+      `${(sk.mjesto || '').replace(/^Rijeka\s+/i, '')}, ${sk.datum}`;
+  }
   document.title = `Mušičarska liga Crne Gore ${zadnje.godina || ''}: rang lista`;
   $('#next-name').textContent = `kolo-${(zadnje.kolo || S.kola.length) + 1}.xlsx`;
 
@@ -1806,6 +1886,9 @@ async function ucitaj() {
     .then(j => (j && j.kazne) || [])
     .catch(() => []);
   S.kazne = kazne;
+  S.sljedece = await fetch('data/sljedece-kolo.json', { cache: 'no-cache' })
+    .then(r => r.ok ? r.json() : null)
+    .catch(() => null);
 
   const pokusaji = [];
   for (let i = 1; i <= MAX_KOLA; i++) {
@@ -1950,7 +2033,7 @@ if (typeof document !== 'undefined') {
 
 // za test.js (node); u browseru ovo ne postoji i ne radi ništa
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO,
+  module.exports = { kljuc, kanonKlub, parsirajKolo, sezona, saPromjenom, statistika, poredak, asGrid, crtajLinije, S, crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, rezultatiEkipno, primijeniKazne, profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI,
     prognoza, scenarij, mozeDoTitule, rasponKola, sesijskaIstorija, prevodUMjesto, staTreba, matricaDvoboja, zbiroviPoMjestu, licnaTrka, granicaProtiv, UKUPNO_KOLA,
     KOL_PROGNOZA };
 }

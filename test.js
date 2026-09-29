@@ -15,7 +15,7 @@ const { parsirajKolo, sezona, kljuc, kanonKlub, asGrid, statistika, crtajLinije,
         crtajTabelu, kratkoIme, KOL_RANG, KOL_KLUB, saPromjenom, rezultatiEkipno, primijeniKazne,
         prognoza, scenarij, mozeDoTitule, rasponKola, UKUPNO_KOLA,
         staTreba, matricaDvoboja, zbiroviPoMjestu, prevodUMjesto, licnaTrka,
-        profilTerena, poeniZaDuzinu, koordinateZa, uISO } = require('./app.js');
+        profilTerena, poeniZaDuzinu, koordinateZa, uISO, DANI } = require('./app.js');
 
 const KOLA = [1, 2, 3, 4, 5].map(i => `data/kolo-${i}.xlsx`);
 const REFERENCA = path.join('test-data', 'referenca-III-kolo.xlsx');
@@ -482,6 +482,18 @@ const tara = tereni.find(t => /Tara, Mojkovac/i.test(t.mjesto));
 assert.ok(lim.prosjek < tara.prosjek, 'Lim ima sitniju ribu od Tare');
 assert.strictEqual(uISO('27. 09. 2026'), '2026-09-27');
 assert.strictEqual(uISO('nema datuma'), null);
+// sljedece kolo: konfiguracija mora da se slaze sa onim sto sajt ocekuje
+const SK = JSON.parse(fs.readFileSync('data/sljedece-kolo.json', 'utf8'));
+assert.strictEqual(SK.kolo, sez.kola.length + 1, 'sljedece kolo je naredno po redu');
+assert.ok(!sez.kola.some(k => k.kolo === SK.kolo), 'sljedece kolo jos nije odigrano');
+const isoSK = uISO(SK.datum);
+assert.ok(isoSK, 'datum sljedeceg kola se moze pretvoriti u ISO');
+assert.ok(koordinateZa(SK.mjesto), `${SK.mjesto}: nema koordinata, prognoza se ne bi mogla povuci`);
+assert.ok(tereni.find(t => t.mjesto === SK.referenca), 'referentni teren postoji u podacima');
+assert.strictEqual(DANI[new Date(isoSK + 'T00:00:00').getDay()], 'nedjelja', '11. oktobar 2026. je nedjelja');
+assert.ok(new Date(isoSK) > new Date(uISO(sez.kola[sez.kola.length - 1].datum)), 'sljedece kolo je poslije posljednjeg odigranog');
+console.log(`  OK  sljedece kolo: ${SK.mjesto}, ${SK.datum}, referenca ${SK.referenca}`);
+
 console.log(`  OK  karton rijeke: ${ribaUkupno} riba, ${tereni.length} terena, bodovanje 20/cm + 100`);
 
 console.log(`  OK  prognoza: kalkulator tacan, granice tacne, simulacija ponovljiva (${preostalo} preostala kola, ${zivi.length} jos u igri)`);

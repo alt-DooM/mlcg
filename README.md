@@ -109,6 +109,23 @@ treba dodati tamo. Temperatura vode i vodostaj se ne mogu besplatno povući ni
 sa jednog javnog servisa za crnogorske rijeke, pa ih nema. Ako vrijeme ne stigne,
 sekcija se jednostavno ne prikaže.
 
+## Sljedeće kolo
+
+`data/sljedece-kolo.json` opisuje kolo koje tek dolazi:
+
+```json
+{ "kolo": 6, "mjesto": "Rijeka Lim, Plav", "datum": "11. 10. 2026", "referenca": "Rijeka Lim, Berane" }
+```
+
+Iz toga ide traka na vrhu taba **Rijeke** sa prognozom za taj dan i odbrojavanjem,
+i jedna linija u zaglavlju sajta. `referenca` je teren čiji se karton otvara kao
+najbliži, jer na novom terenu još nema podataka. Kad se kolo odigra i fajl stigne
+u `data/`, traka sama nestane; tad ovdje upiši naredno kolo ili obriši fajl.
+
+Prognoza se povlači sa drugog Open-Meteo servisa od istorije i kešira se samo tri
+sata, jer se mijenja. Dalje od 16 dana servis ne daje ništa, pa tad piše da
+prognoza još nije dostupna.
+
 ## Pravila obračuna
 
 Ista kao u `popuni_tabelu.py`:
