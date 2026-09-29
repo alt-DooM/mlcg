@@ -341,7 +341,8 @@ const { min, max } = rasponKola(sez, false);
 assert.ok(min >= 3 && max <= 27 && min < max, `raspon zbira po kolu (${min}-${max})`);
 
 // kalkulator mora da daje tacno ono sto se rucno izracuna
-const prosjeci = new Map(st.perTakmicar.map(v => [v.kljuc, v.plasman / v.kolaOdigrao]));
+// isto zaokruzivanje kao u prosjeciPoKolu(), inace test i sajt racunaju razlicito
+const prosjeci = new Map(st.perTakmicar.map(v => [v.kljuc, Math.round(v.plasman / v.kolaOdigrao)]));
 const vodeci = osnova[0], drugi = osnova[1];
 let sc = scenarij(osnova, new Map([[vodeci.kljuc, max], [drugi.kljuc, min]]), preostalo, prosjeci);
 let poK = new Map(sc.map(v => [v.kljuc, v]));
@@ -386,6 +387,12 @@ const uMjesto = prevodUMjesto(sez, false);
 const treba = staTreba(osnova, prosjeci, preostalo, min, max);
 const zivi = osnova.filter(v => treba.get(v.kljuc).moguce);
 assert.ok(zivi.length >= 1 && zivi.length < osnova.length, 'neko moze do titule, ali ne svi');
+// "stize ako ostali igraju prosjek" je uzi skup od "matematicki jos moze";
+// ranije su bili pomijesani pa je sajt tvrdio da otpisani nemaju nikakve sanse
+const matematicki = mozeDoTitule(osnova, preostalo, min, max);
+for (const v of zivi) assert.ok(matematicki.get(v.kljuc), `${v.ime}: stize po prosjeku a matematicki ne moze`);
+assert.ok(osnova.filter(v => matematicki.get(v.kljuc)).length >= zivi.length,
+  'matematicki moze bar onoliko koliko ih stize po prosjeku');
 assert.strictEqual(zivi[0].kljuc, osnova[0].kljuc, 'vodeci je uvijek medju zivima');
 for (const v of zivi) {
   const g = treba.get(v.kljuc).granica;

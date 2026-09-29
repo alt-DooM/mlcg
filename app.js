@@ -1475,9 +1475,14 @@ function renderStaTreba() {
   const uMjesto = prevodUMjesto(S.sez, ekipno);
   const treba = staTreba(osnova, prosjeci, preostalo, min, max);
 
+  // Dvije razlicite stvari, ranije pomijesane:
+  //  - `treba`: ko stize ako ostali odigraju svoj prosjek (realno)
+  //  - `matematicki`: ko jos uopste moze, uz tudji potpuni podbacaj
+  const matematicki = mozeDoTitule(osnova, preostalo, min, max);
   const zivi = osnova.filter(v => treba.get(v.kljuc).moguce);
-  const ispali = osnova.length - zivi.length;
+  const josMogu = osnova.filter(v => matematicki.get(v.kljuc)).length;
   const rijec = ekipno ? 'klub' : 'takmičar';
+  const oblik = n => n === 1 ? rijec : (rijec === 'klub' ? 'kluba' : 'takmičara');
 
   const kartice = zivi.map((v, i) => {
     const g = treba.get(v.kljuc).granica;
@@ -1491,10 +1496,13 @@ function renderStaTreba() {
   }).join('');
 
   $('#treba-lista').innerHTML = kartice || `<p class="fineprint">Nema preostalih kola.</p>`;
-  $('#treba-rezime').textContent = zivi.length === 1
-    ? `Titula je riješena, ${zivi.length ? (ekipno ? kratkiKlub(zivi[0].ime) : zivi[0].ime) : ''} je više niko ne može stići.`
-    : `Titulu još može ${zivi.length} ${zivi.length === 1 ? rijec + 'a' : (rijec === 'klub' ? 'kluba' : 'takmičara')}.` +
-      (ispali ? ` Ostalima ni najbolji mogući rezultat više nije dovoljan.` : '');
+  $('#treba-rezime').innerHTML = zivi.length === 0
+    ? 'Nema preostalih kola.'
+    : `Ako ostali odigraju svoj prosjek, titulu ${zivi.length === 1 ? 'može' : 'mogu'} ` +
+      `<b>${zivi.length} ${oblik(zivi.length)}</b>.` +
+      (josMogu > zivi.length
+        ? ` Matematički ${josMogu === 1 ? 'je može' : 'ih je mogu'} još ${josMogu}, ali samo uz tuđi potpuni podbačaj.`
+        : '');
 
   return { osnova, prosjeci, min, max, uMjesto, zivi };
 }
