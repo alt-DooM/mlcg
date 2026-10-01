@@ -465,3 +465,13 @@ tr.m1{background:#f7e9c4} tr.m2{background:#eceef0} tr.m3{background:#f4e0cc}
 #rekordi-tereni .kpi-k{display:flex;align-items:center;gap:7px;text-transform:none;letter-spacing:.02em;font-size:13px}
 #rekordi-tereni .kpi-k .ik{width:16px;height:16px;color:var(--accent)}
 .kpi-d{font:500 14px/1.4 Archivo,sans-serif;color:var(--muted);margin-top:6px}
+
+/* Velika tabela na desktopu skroluje unutar kartice, pa se do vodoravnog
+   skrolbara ne mora silaziti na dno stranice. Zaglavlje ostaje zakovano
+   pri vertikalnom skrolu, kao sto su Mj. i ime zakovani pri vodoravnom.
+   Samo desktop: na telefonu je skrol unutar skrola samo smetnja. */
+@media (min-width:901px){
+  .tbl-visoka{max-height:72vh;overflow:auto}
+  .tbl-visoka thead th{position:sticky;top:0;z-index:4}
+  .tbl-visoka thead th.c-pos,.tbl-visoka thead th.c-name{z-index:5}
+}

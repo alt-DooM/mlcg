@@ -577,6 +577,8 @@ function statistika(sez) {
     prosjekPoena: a.sesija ? a.poena / a.sesija : 0,
     prosjekRiba: a.sesija ? a.riba / a.sesija : 0,
     prosjekPlasmana: a.sesijskiPlasmani.length ? zbir(a.sesijskiPlasmani) / a.sesijskiPlasmani.length : 0,
+    // sektorski plasman 1 znaci prvo mjesto u svojoj grupi u toj sesiji
+    prviUSesiji: a.sesijskiPlasmani.filter(x => x === 1).length,
     najbolje: a.mjesta.length ? Math.min(...a.mjesta.map(m => m.mjesto)) : null,
     najgore: a.mjesta.length ? Math.max(...a.mjesta.map(m => m.mjesto)) : null,
     raspon: a.mjesta.length ? Math.max(...a.mjesta.map(m => m.mjesto)) - Math.min(...a.mjesta.map(m => m.mjesto)) : null,
@@ -1346,6 +1348,7 @@ const KOL_STAT = [
   { key: 'riba', lbl: 'Riba', tip: 'int' },
   { key: 'prosjekRiba', lbl: 'Riba / sesija', tip: 'dec' },
   { key: 'najduza', lbl: 'Najduža (cm)', tip: 'int' },
+  { key: 'prviUSesiji', lbl: 'Pobjeda u sesiji', tip: 'int' },
   { key: 'najbolje', lbl: 'Najbolje u kolu', tip: 'int', asc: true },
   { key: 'najgore', lbl: 'Najgore u kolu', tip: 'int', asc: true },
   { key: 'prosjekPlasmana', lbl: 'Prosj. sekt. plasman', tip: 'dec', asc: true },
@@ -1850,6 +1853,8 @@ const KOORDINATE = [
   [/tara.*mojkovac/i, 42.960, 19.583],
   [/lim.*berane/i, 42.844, 19.871],
   [/lim.*plav|plavsko/i, 42.598, 19.944],
+  // Kolasin pise teren cas kao Taru, cas kao Biogradsko jezero
+  [/biogradsk/i, 42.897, 19.600],
 ];
 
 const koordinateZa = mjesto => {

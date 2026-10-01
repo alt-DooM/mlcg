@@ -255,7 +255,26 @@ for (const t of st.perTakmicar) {
   assert.ok(t.nule <= t.sesija, `${t.ime}: sesija bez ribe ne može biti više od odigranih sesija`);
   assert.ok(t.najbolje >= 1 && t.najgore >= t.najbolje, `${t.ime}: raspon plasmana`);
 }
+// pobjede u sesiji: prebrojano direktno iz kola, pa uporedjeno sa statistikom.
+// Nije tacno 9 po kolu: neriješena prva mjesta daju dva pobjednika, a grupa u
+// kojoj niko nista nije ulovio nema prvo mjesto (I kolo, treca sesija).
+const prviPo = new Map();
+for (const kolo of sez.kola) {
+  for (const r of kolo.rezultati.values()) {
+    const n = (r.sesije || []).filter(x => x && x.plasman === 1).length;
+    prviPo.set(r.kljuc, (prviPo.get(r.kljuc) || 0) + n);
+  }
+}
+for (const t of st.perTakmicar) {
+  assert.strictEqual(t.prviUSesiji, prviPo.get(t.kljuc) || 0,
+    `${t.ime}: broj pobjeda u sesiji se ne slaze sa rezultatima kola`);
+  assert.ok(t.prviUSesiji <= t.sesija, `${t.ime}: vise pobjeda nego odigranih sesija`);
+}
+const prviUk = st.perTakmicar.reduce((a, t) => a + t.prviUSesiji, 0);
+assert.ok(prviUk >= 8 * sez.kola.length && prviUk <= 12 * sez.kola.length,
+  `ukupno ${prviUk} pobjeda u sesiji na ${sez.kola.length} kola nije u ocekivanom rasponu`);
 assert.ok(st.rekordi.najSesija && st.rekordi.najRiba, 'rekordi sezone su izračunati');
+console.log(`  OK  pobjede u sesiji: ${prviUk} ukupno, najvise ${Math.max(...st.perTakmicar.map(t => t.prviUSesiji))}`);
 console.log(`  OK  statistika: ${st.perTakmicar.length} takmičara, ${st.perKlub.length} klubova, ${st.ukupno.riba} riba`);
 
 /* --- 5. grafikon --- */
@@ -473,7 +492,7 @@ assert.strictEqual(poeniZaDuzinu(48), 1060);
 assert.ok(2 * poeniZaDuzinu(20) > poeniZaDuzinu(40), 'dvije male ribe nose vise od jedne velike');
 
 const tereni = profilTerena(sez);
-assert.strictEqual(tereni.length, 4, 'pet kola na cetiri terena');
+assert.strictEqual(tereni.length, 5, 'pet kola na pet terena');
 assert.strictEqual(tereni.reduce((a, t) => a + t.ukupnoRiba, 0), ribaUkupno, 'sve ribe su rasporedjene po terenima');
 assert.strictEqual(tereni.reduce((a, t) => a + t.brojKola, 0), sez.kola.length);
 for (const t of tereni) {
